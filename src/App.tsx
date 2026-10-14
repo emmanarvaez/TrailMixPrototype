@@ -30,7 +30,7 @@ const detailOptions = [
 ];
 
 const ratings = [
-  { label: "Loved it", icon: "♥", color: "#e25e3f" },
+  { label: "Loved it!", icon: "♥", color: "#e25e3f" },
   { label: "It was fine", icon: "●", color: "#d5a23e" },
   { label: "Not for me", icon: "−", color: "#6e8370" },
 ];
