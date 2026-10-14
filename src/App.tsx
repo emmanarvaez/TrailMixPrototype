@@ -142,7 +142,7 @@ function TrailSelect({
       <section className="screen-content trail-screen">
         <div className="screen-title">
           <span className="eyebrow">Pick your path</span>
-          <h1>Which trail did you hike?</h1>
+          <h1>Which trail did you hike</h1>
         </div>
         <label className="search-field">
           <span aria-hidden="true">⌕</span>
