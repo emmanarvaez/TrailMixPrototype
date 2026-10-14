@@ -351,7 +351,7 @@ function Shell({
           </button>
         ) : <span className="header-spacer" />}
         <div className="wordmark">
-          <img alt="TrailMix" className="wordmark-logo" src="/assets/trailmix_logo.svg" />
+          <b>TrailMix</b>
         </div>
         <span className="header-spacer" />
       </header>
@@ -361,19 +361,13 @@ function Shell({
   );
 }
 
-function Squirrel({ mood = "eager", small = false }: { mood?: "eager" | "wow" | "down"; small?: boolean }) {
+function Squirrel({ small = false }: { mood?: "eager" | "wow" | "down"; small?: boolean }) {
   return (
-    <div aria-label="TrailMix squirrel mascot" className={`squirrel ${small ? "small" : ""} ${mood}`}>
-      <span className="tail" />
-      <span className="body"><span className="backpack" /></span>
-      <span className="head">
-        <i className="ear left" /><i className="ear right" />
-        <i className="eye left" /><i className="eye right" />
-        <i className="cheek left" /><i className="cheek right" />
-        <i className="nose" />
-      </span>
-      <span className="arm" />
-    </div>
+    <img
+      alt="TrailMix mascot"
+      src="/assets/cashew.svg"
+      style={{ width: small ? 48 : 80, height: "auto", display: "block" }}
+    />
   );
 }
 
