@@ -351,7 +351,7 @@ function Shell({
           </button>
         ) : <span className="header-spacer" />}
         <div className="wordmark">
-          <b>TrailMix</b>
+          <img alt="TrailMix" className="wordmark-logo" src="/assets/logo-word.svg" />
         </div>
         <span className="header-spacer" />
       </header>
@@ -366,7 +366,7 @@ function Squirrel({ small = false }: { mood?: "eager" | "wow" | "down"; small?: 
     <img
       alt="TrailMix mascot"
       src="/assets/cashew.svg"
-      style={{ width: small ? 48 : 80, height: "auto", display: "block" }}
+      style={{ width: small ? 72 : 120, height: "auto", display: "block" }}
     />
   );
 }
