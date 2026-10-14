@@ -1,0 +1,10 @@
+{
+  "description": "Create stunning hi-fidelity prototypes effortlessly, enabling designers and teams to visualize and test their ideas for improved collaboration and feedback.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
