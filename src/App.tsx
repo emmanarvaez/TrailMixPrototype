@@ -37,6 +37,256 @@ const ratings = [
 
 const availableFriends = ["Caine", "Kaylee", "Oscar", "Amanda", "Emma"];
 
+// Ingredients unlocked before this hike (one per previously completed hike).
+// Index UNLOCKED_COUNT is the ingredient this hike unlocks.
+const UNLOCKED_COUNT = 3;
+
+function GlobalStyles() {
+  return (
+    <style>{`
+      /* ── Change 1: speech bubble ── */
+      .mascot-prompt {
+        pointer-events: none !important;
+        cursor: default !important;
+      }
+      .speech-bubble {
+        position: relative !important;
+        cursor: default !important;
+        box-shadow: none !important;
+        border: none !important;
+        background: #fff8f0 !important;
+        border-radius: 14px !important;
+        padding: 8px 14px !important;
+        font-weight: 600;
+        color: #5a3e2b;
+      }
+      .speech-bubble-tail {
+        position: absolute;
+        bottom: -9px;
+        right: 16px;
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 10px solid #fff8f0;
+        pointer-events: none;
+      }
+
+      /* ── Change 2: drag hint ── */
+      @keyframes bounce-hint {
+        0%, 100% { transform: translateY(0); }
+        40%       { transform: translateY(-7px); }
+      }
+      .rank-item.new-trail.show-hint {
+        animation: bounce-hint 1.4s ease-in-out infinite;
+      }
+      .drag-first-hint {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+        font-size: 11px;
+        color: #8a6e4b;
+        padding: 2px 8px 0;
+        opacity: 0.85;
+      }
+      .drag-context-strip {
+        text-align: center;
+        font-size: 11px;
+        color: #5a3e2b;
+        background: rgba(255,248,240,0.9);
+        border-radius: 8px;
+        padding: 4px 12px;
+        margin: 6px 16px 0;
+        line-height: 1.5;
+        font-weight: 500;
+      }
+
+      /* ── Change 4: ingredient icons bigger, vertical layout ── */
+      .detail-chip {
+        flex-direction: column !important;
+        align-items: center !important;
+        padding: 12px 6px 10px !important;
+        gap: 7px !important;
+        text-align: center !important;
+      }
+      .detail-chip .ingredient-dot {
+        width: 44px !important;
+        height: 44px !important;
+        border-radius: 50% !important;
+        flex-shrink: 0 !important;
+      }
+      .detail-chip > .chip-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+      }
+
+      /* ── Change 5: locked ingredients ── */
+      .detail-chip.locked {
+        opacity: 0.42;
+        cursor: not-allowed !important;
+        pointer-events: none !important;
+        filter: grayscale(0.7);
+      }
+      .lock-badge {
+        font-size: 16px;
+        line-height: 1;
+        display: block;
+        margin-top: -4px;
+      }
+
+      /* ── Change 3: friend chips ── */
+      .tagged-friends {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        margin-top: 8px !important;
+      }
+      .friend-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #e8f0e9;
+        border: none;
+        border-radius: 20px;
+        padding: 5px 10px 5px 6px;
+        font-size: 13px;
+        cursor: pointer;
+        color: #3a4f3c;
+        font-weight: 500;
+      }
+      .friend-chip .chip-avatar {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #5a8c5e;
+        color: white;
+        font-size: 11px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .friend-chip .chip-remove {
+        font-size: 14px;
+        color: #8a7e70;
+        margin-left: 2px;
+        line-height: 1;
+      }
+
+      /* ── Change 7: result summary ── */
+      .new-unlock-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #fff8f0;
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin: 16px 16px 0;
+      }
+      .new-unlock-dot {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .new-unlock-copy small {
+        display: block;
+        font-size: 11px;
+        color: #8a7e70;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 3px;
+      }
+      .new-unlock-copy b {
+        font-size: 15px;
+        color: #3a2c1e;
+        display: block;
+      }
+      .new-unlock-copy span {
+        font-size: 12px;
+        color: #8a7e70;
+      }
+      .result-stats-row {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        margin: 14px 16px 0;
+      }
+      .result-stat-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: #f5f0e8;
+        border-radius: 12px;
+        padding: 10px 14px;
+        flex: 1;
+      }
+      .result-stat-box b {
+        font-size: 22px;
+        color: #3a2c1e;
+        line-height: 1;
+      }
+      .result-stat-box small {
+        font-size: 11px;
+        color: #8a7e70;
+        margin-top: 3px;
+        text-align: center;
+      }
+      .full-rankings-section {
+        margin: 20px 16px 8px;
+      }
+      .full-rankings-section h3 {
+        font-size: 11px;
+        color: #8a7e70;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 8px 4px;
+      }
+      .full-rank-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        margin-bottom: 2px;
+      }
+      .full-rank-item.highlight {
+        background: #fff0e0;
+      }
+      .full-rank-item .fr-num {
+        font-size: 12px;
+        color: #8a7e70;
+        width: 26px;
+        flex-shrink: 0;
+      }
+      .full-rank-item .fr-name {
+        font-size: 14px;
+        color: #3a2c1e;
+        flex: 1;
+        font-weight: 400;
+      }
+      .full-rank-item.highlight .fr-name {
+        font-weight: 600;
+      }
+      .new-badge {
+        font-size: 10px;
+        background: #e25e3f;
+        color: white;
+        padding: 2px 7px;
+        border-radius: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+    `}</style>
+  );
+}
+
 function Arrow({ direction = "right" }: { direction?: "right" | "left" }) {
   return direction === "right" ? (
     <img alt="" className="arrow-icon" src="/assets/6a752.svg" />
@@ -72,6 +322,7 @@ function Shell({
 }) {
   return (
     <main className="app-shell">
+      <GlobalStyles />
       <header className="app-header">
         {onBack ? (
           <button aria-label="Go back" className="header-back" onClick={onBack}>
@@ -233,8 +484,12 @@ function RateTrail({
           />
           <div className="difficulty-labels"><span>Easy</span><span>Moderate</span><span>Tough</span></div>
         </div>
+        {/* Change 1: speech bubble — not a button, no hover/press states, tail points at mascot */}
         <div className="mascot-prompt">
-          <div className="speech-bubble">Spill it!</div>
+          <div className="speech-bubble">
+            Spill it!
+            <span className="speech-bubble-tail" />
+          </div>
           <Squirrel small />
         </div>
       </section>
@@ -263,6 +518,9 @@ function RankTrail({
   const [showLowerRanks, setShowLowerRanks] = useState(!ranking.includes("Bommer Canyon Loop"));
   const draggingIndex = useRef<number | null>(null);
   const dragY = useRef(0);
+  // Change 2: track whether the user has dragged at least once and the live drag position
+  const [hasDragged, setHasDragged] = useState(false);
+  const [dragPos, setDragPos] = useState<number | null>(null);
 
   const move = (items: string[], updateItems: (items: string[]) => void, from: number, to: number) => {
     if (from === to || to < 0 || to >= items.length) return;
@@ -271,11 +529,13 @@ function RankTrail({
     next.splice(to, 0, item);
     draggingIndex.current = to;
     updateItems(next);
+    setDragPos(to);
   };
 
   const startDrag = (index: number, y: number) => {
     draggingIndex.current = index;
     dragY.current = y;
+    setDragPos(index);
   };
 
   const handleMove = (y: number) => {
@@ -289,6 +549,27 @@ function RankTrail({
     }
   };
 
+  const stopDrag = () => {
+    draggingIndex.current = null;
+    setDragPos(null);
+    setHasDragged(true);
+  };
+
+  // Compute the "Above X, below Y" context text while dragging
+  const getDragContext = (): string | null => {
+    if (dragPos === null) return null;
+    const items = showLowerRanks ? lowerRanking : ranking.slice(0, 4);
+    // items[dragPos - 1] has a higher rank → Bommer is below them
+    // items[dragPos + 1] has a lower rank → Bommer is above them
+    const higherNeighbor = items[dragPos - 1];
+    const lowerNeighbor = items[dragPos + 1];
+    const parts: string[] = [];
+    if (lowerNeighbor) parts.push(`Above ${lowerNeighbor}`);
+    if (higherNeighbor) parts.push(`below ${higherNeighbor}`);
+    if (parts.length === 0) return "Your top-ranked hike!";
+    return parts.join(", ");
+  };
+
   const openLowerRanks = () => {
     setRanking(ranking.filter((name) => name !== "Bommer Canyon Loop"));
     setLowerRanking(["Bommer Canyon Loop", ...lowerRanking.filter((name) => name !== "Bommer Canyon Loop")]);
@@ -300,6 +581,8 @@ function RankTrail({
     setRanking([...ranking.filter((name) => name !== "Bommer Canyon Loop"), "Bommer Canyon Loop"]);
     setShowLowerRanks(false);
   };
+
+  const dragContext = getDragContext();
 
   return (
     <Shell onBack={onBack} step={3}>
@@ -326,7 +609,7 @@ function RankTrail({
                   const isNew = name === "Bommer Canyon Loop";
                   return (
                     <div
-                      className={`rank-item rank-${index + 1} ${isNew ? "new-trail" : ""}`}
+                      className={`rank-item rank-${index + 1} ${isNew ? "new-trail" : ""} ${isNew && !hasDragged ? "show-hint" : ""}`}
                       key={name}
                       onPointerDown={(event) => {
                         if (!isNew) return;
@@ -334,7 +617,7 @@ function RankTrail({
                         startDrag(index, event.clientY);
                       }}
                       onPointerMove={(event) => handleMove(event.clientY)}
-                      onPointerUp={() => { draggingIndex.current = null; }}
+                      onPointerUp={stopDrag}
                     >
                       <span className="rank-number">#{index + 1}</span>
                       <span className="rank-name">{name}</span>
@@ -343,6 +626,17 @@ function RankTrail({
                   );
                 })}
               </div>
+              {/* Change 2: first-time hint label */}
+              {!hasDragged && (
+                <div className="drag-first-hint">
+                  <span style={{ fontSize: 14 }}>✋</span>
+                  <span>Drag me up or down</span>
+                </div>
+              )}
+              {/* Change 2: live context during drag */}
+              {dragContext && (
+                <div className="drag-context-strip">{dragContext}</div>
+              )}
               <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
             </div>
             <button className="lower-ranks-button" onClick={openLowerRanks}>
@@ -358,7 +652,7 @@ function RankTrail({
                 const isNew = name === "Bommer Canyon Loop";
                 return (
                   <div
-                    className={`lower-rank-item ${isNew ? "new-trail" : ""}`}
+                    className={`lower-rank-item ${isNew ? "new-trail" : ""} ${isNew && !hasDragged ? "show-hint" : ""}`}
                     key={name}
                     onPointerDown={(event) => {
                       if (!isNew) return;
@@ -366,7 +660,7 @@ function RankTrail({
                       startDrag(index, event.clientY);
                     }}
                     onPointerMove={(event) => handleMove(event.clientY)}
-                    onPointerUp={() => { draggingIndex.current = null; }}
+                    onPointerUp={stopDrag}
                   >
                     <span className="rank-number">#{index + 4}</span>
                     <span className="rank-name">{name}</span>
@@ -374,6 +668,10 @@ function RankTrail({
                   </div>
                 );
               })}
+              {/* Change 2: context during drag in lower ranks view */}
+              {dragContext && (
+                <div className="drag-context-strip">{dragContext}</div>
+              )}
             </div>
           </div>
         )}
@@ -425,22 +723,45 @@ function AddDetails({
         </div>
         <div className="field-group">
           <div className="section-heading"><h2>What made this one?</h2><span>Select multiple</span></div>
-          <p className="unlock-note">The more hikes you log, the more ingredients you can unlock.</p>
+          {/* Change 6: explain what ingredients are for */}
+          <p className="unlock-note" style={{ marginBottom: 4 }}>
+            Each hike adds an ingredient to your trail mix jar. Your jar shows what kind of hiker you are.
+          </p>
+          {/* Change 4 + 5: bigger vertical chips, locked state */}
           <div className="detail-grid">
-            {detailOptions.map((option, index) => (
-              <button
-                className={`detail-chip ${selectedDetails.includes(index) ? "selected" : ""}`}
-                key={option.label}
-                onClick={() => setSelectedDetails(
-                  selectedDetails.includes(index)
-                    ? selectedDetails.filter((item) => item !== index)
-                    : [...selectedDetails, index],
-                )}
-              >
-                <span className={`ingredient-dot ${option.shape}`} style={{ background: option.color }} />
-                <span><b>{option.label}</b><small>{option.ingredient}</small></span>
-              </button>
-            ))}
+            {detailOptions.map((option, index) => {
+              const isLocked = index >= UNLOCKED_COUNT;
+              const isSelected = selectedDetails.includes(index);
+              return (
+                <button
+                  className={`detail-chip ${isSelected ? "selected" : ""} ${isLocked ? "locked" : ""}`}
+                  disabled={isLocked}
+                  key={option.label}
+                  onClick={() => {
+                    if (isLocked) return;
+                    setSelectedDetails(
+                      isSelected
+                        ? selectedDetails.filter((item) => item !== index)
+                        : [...selectedDetails, index],
+                    );
+                  }}
+                >
+                  {/* Change 5: lock icon instead of ingredient dot for locked items */}
+                  {isLocked ? (
+                    <span className="lock-badge">🔒</span>
+                  ) : (
+                    <span
+                      className={`ingredient-dot ${option.shape}`}
+                      style={{ background: option.color }}
+                    />
+                  )}
+                  <span className="chip-text">
+                    <b>{option.label}</b>
+                    <small>{isLocked ? "Locked" : option.ingredient}</small>
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
         <div className="field-group">
@@ -456,6 +777,7 @@ function AddDetails({
           <textarea maxLength={140} onChange={(event) => setCaption(event.target.value)} placeholder="What do you want to remember?" value={caption} />
           <small>{caption.length}/140</small>
         </label>
+        {/* Change 3: tag friends with filter → chip → remove */}
         <div className="friend-field">
           <span>Tag Friends</span>
           <div className="friend-search">
@@ -491,11 +813,14 @@ function AddDetails({
               {taggedFriends.map((name) => (
                 <button
                   aria-label={`Remove ${name}`}
+                  className="friend-chip"
                   key={name}
-                  onClick={() => setTaggedFriends((current) => current.filter((friendName) => friendName !== name))}
+                  onClick={() => setTaggedFriends((current) => current.filter((n) => n !== name))}
                   type="button"
                 >
-                  <span>{name.charAt(0)}</span>{name}<i>×</i>
+                  <span className="chip-avatar">{name.charAt(0)}</span>
+                  {name}
+                  <span aria-hidden="true" className="chip-remove">×</span>
                 </button>
               ))}
             </div>
@@ -521,14 +846,18 @@ function Ingredient({ type, className = "" }: { type: string; className?: string
 function Result({
   rank,
   details,
+  trail,
+  ranking,
+  lowerRanking,
   onRestart,
-  onRankings,
   onBack,
 }: {
   rank: number;
   details: number[];
+  trail: Trail;
+  ranking: string[];
+  lowerRanking: string[];
   onRestart: () => void;
-  onRankings: () => void;
   onBack: () => void;
 }) {
   const choices = details.map((detail) => detailOptions[detail]);
@@ -537,6 +866,19 @@ function Result({
     "candy", "almond", "raisin", "seed", "pretzel", "chocolate",
     "raisin", "candy", "almond", "seed", "pretzel",
   ], []);
+
+  // Change 7: newly unlocked ingredient (UNLOCKED_COUNT is the index now unlocked)
+  const newlyUnlocked = detailOptions[UNLOCKED_COUNT];
+
+  // Stats
+  const totalHikes = ranking.length + lowerRanking.length;
+  const miles = trail.meta.split("·")[0].trim();
+
+  // Full ranked list combining mountain + lower ranks
+  const allRanked = [...ranking, ...lowerRanking];
+
+  // Ref for scrolling to the full rankings section
+  const rankingsRef = useRef<HTMLDivElement>(null);
 
   return (
     <Shell onBack={onBack} step={5}>
@@ -573,9 +915,58 @@ function Result({
           <b>#{rank}</b>
           <small>in your personal rankings</small>
         </div>
+
+        {/* Change 7: newly unlocked ingredient */}
+        <div className="new-unlock-row">
+          <span
+            className="new-unlock-dot"
+            style={{ background: newlyUnlocked.color }}
+          />
+          <div className="new-unlock-copy">
+            <small>New ingredient unlocked</small>
+            <b>{newlyUnlocked.ingredient}</b>
+            <span>for {newlyUnlocked.label.toLowerCase()} on the trail</span>
+          </div>
+        </div>
+
+        {/* Change 7: quick stats */}
+        <div className="result-stats-row">
+          <div className="result-stat-box">
+            <b>{totalHikes}</b>
+            <small>hikes logged</small>
+          </div>
+          <div className="result-stat-box">
+            <b>#{rank}</b>
+            <small>your ranking</small>
+          </div>
+          <div className="result-stat-box">
+            <b>{miles}</b>
+            <small>this hike</small>
+          </div>
+        </div>
+
+        {/* Change 7: full ranked hike list */}
+        <div className="full-rankings-section" ref={rankingsRef}>
+          <h3>Your rankings</h3>
+          {allRanked.map((name, index) => {
+            const isNew = name === "Bommer Canyon Loop";
+            return (
+              <div className={`full-rank-item ${isNew ? "highlight" : ""}`} key={name}>
+                <span className="fr-num">#{index + 1}</span>
+                <span className="fr-name">{name}</span>
+                {isNew && <span className="new-badge">New</span>}
+              </div>
+            );
+          })}
+        </div>
       </section>
       <div className="dual-action sticky-action">
-        <Button secondary onClick={onRankings}>My rankings</Button>
+        <Button
+          secondary
+          onClick={() => rankingsRef.current?.scrollIntoView({ behavior: "smooth" })}
+        >
+          My rankings
+        </Button>
         <Button onClick={onRestart}>Done</Button>
       </div>
     </Shell>
@@ -618,8 +1009,8 @@ export default function App() {
   return (
     <Result
       details={selectedDetails}
+      lowerRanking={lowerRanking}
       onBack={() => go(4)}
-      onRankings={() => go(3)}
       onRestart={() => {
         setRating("");
         setDifficulty(2);
@@ -631,8 +1022,10 @@ export default function App() {
       rank={
         ranking.includes("Bommer Canyon Loop")
           ? ranking.indexOf("Bommer Canyon Loop") + 1
-          : lowerRanking.indexOf("Bommer Canyon Loop") + 4
+          : lowerRanking.indexOf("Bommer Canyon Loop") + ranking.length + 1
       }
+      ranking={ranking}
+      trail={selectedTrail ?? trails[0]}
     />
   );
 }
