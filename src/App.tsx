@@ -21,12 +21,19 @@ const trails: Trail[] = [
 ];
 
 const detailOptions = [
-  { label: "Views", ingredient: "Chocolate", color: "#6f4434", shape: "chocolate" },
-  { label: "Waterfall", ingredient: "Raisins", color: "#6b405f", shape: "raisin" },
-  { label: "Climb", ingredient: "Almonds", color: "#d7a15f", shape: "almond" },
-  { label: "Wildlife", ingredient: "Seeds", color: "#d2b35b", shape: "seed" },
-  { label: "Sunset", ingredient: "M&Ms", color: "#e4673d", shape: "candy" },
-  { label: "Rocky", ingredient: "Pretzels", color: "#bd783f", shape: "pretzel" },
+  { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
+  { label: "Waterfall",  ingredient: "Dried Fruit", color: "#6b405f", shape: "dried-fruit", icon: "/assets/dried-fruit.svg" },
+  { label: "Climb",      ingredient: "Almonds",     color: "#d7a15f", shape: "almonds",    icon: "/assets/almonds.svg" },
+  { label: "Wildlife",   ingredient: "Cashews",     color: "#c8a04a", shape: "cashew",     icon: "/assets/cashew.svg" },
+  { label: "Sunset",     ingredient: "Cranberries", color: "#c94f3a", shape: "cranberries",icon: "/assets/cranberries.svg" },
+  { label: "Rocky",      ingredient: "Pretzels",    color: "#bd783f", shape: "pretzel",    icon: "/assets/pretzel.svg" },
+  { label: "Forest",     ingredient: "Nuts",        color: "#5a7a3a", shape: "nuts",       icon: "/assets/nuts.svg" },
+  { label: "Summit",     ingredient: "Apricot",     color: "#d4813a", shape: "apricot",    icon: "/assets/apricot.svg" },
+  { label: "Meadow",     ingredient: "Banana",      color: "#c9a820", shape: "banana",     icon: "/assets/banana.svg" },
+  { label: "River",      ingredient: "Dates",       color: "#7a4e2a", shape: "date",       icon: "/assets/date.svg" },
+  { label: "Campfire",   ingredient: "Popcorn",     color: "#d4b030", shape: "popcorn",    icon: "/assets/popcorn.svg" },
+  { label: "Snack Break",ingredient: "Chex",        color: "#b8763a", shape: "chex",       icon: "/assets/chex.svg" },
+  { label: "Shade",      ingredient: "Pistachios",  color: "#7a9e4a", shape: "pistachios", icon: "/assets/pistachios.svg" },
 ];
 
 const ratings = [
@@ -39,7 +46,7 @@ const availableFriends = ["Caine", "Kaylee", "Oscar", "Amanda", "Emma"];
 
 // Ingredients unlocked before this hike (one per previously completed hike).
 // Index UNLOCKED_COUNT is the ingredient this hike unlocks.
-const UNLOCKED_COUNT = 3;
+const UNLOCKED_COUNT = 8;
 
 function GlobalStyles() {
   return (
@@ -102,6 +109,13 @@ function GlobalStyles() {
         font-weight: 500;
       }
 
+      /* ── Logo ── */
+      .wordmark-logo {
+        height: 28px;
+        width: auto;
+        display: block;
+      }
+
       /* ── Change 4: ingredient icons bigger, vertical layout ── */
       .detail-chip {
         flex-direction: column !important;
@@ -110,11 +124,14 @@ function GlobalStyles() {
         gap: 7px !important;
         text-align: center !important;
       }
-      .detail-chip .ingredient-dot {
-        width: 44px !important;
-        height: 44px !important;
-        border-radius: 50% !important;
-        flex-shrink: 0 !important;
+      .detail-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+      }
+      .chip-ingredient-img {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        flex-shrink: 0;
       }
       .detail-chip > .chip-text {
         display: flex;
@@ -131,10 +148,14 @@ function GlobalStyles() {
         filter: grayscale(0.7);
       }
       .lock-badge {
-        font-size: 16px;
+        font-size: 28px;
         line-height: 1;
         display: block;
-        margin-top: -4px;
+        width: 56px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
       /* ── Change 3: friend chips ── */
@@ -187,10 +208,10 @@ function GlobalStyles() {
         padding: 12px 14px;
         margin: 16px 16px 0;
       }
-      .new-unlock-dot {
+      .new-unlock-img {
         width: 44px;
         height: 44px;
-        border-radius: 50%;
+        object-fit: contain;
         flex-shrink: 0;
       }
       .new-unlock-copy small {
@@ -330,8 +351,7 @@ function Shell({
           </button>
         ) : <span className="header-spacer" />}
         <div className="wordmark">
-          <span className="wordmark-mark"><span /></span>
-          <b>TrailMix</b>
+          <img alt="TrailMix" className="wordmark-logo" src="/assets/trailmix_logo.svg" />
         </div>
         <span className="header-spacer" />
       </header>
@@ -746,14 +766,10 @@ function AddDetails({
                     );
                   }}
                 >
-                  {/* Change 5: lock icon instead of ingredient dot for locked items */}
                   {isLocked ? (
                     <span className="lock-badge">🔒</span>
                   ) : (
-                    <span
-                      className={`ingredient-dot ${option.shape}`}
-                      style={{ background: option.color }}
-                    />
+                    <img alt={option.ingredient} className="chip-ingredient-img" src={option.icon} />
                   )}
                   <span className="chip-text">
                     <b>{option.label}</b>
@@ -834,13 +850,26 @@ function AddDetails({
   );
 }
 
+const ingredientIcons: Record<string, string> = {
+  chocolate:    "/assets/chocolate.svg",
+  "dried-fruit":"/assets/dried-fruit.svg",
+  almonds:      "/assets/almonds.svg",
+  cashew:       "/assets/cashew.svg",
+  cranberries:  "/assets/cranberries.svg",
+  pretzel:      "/assets/pretzel.svg",
+  nuts:         "/assets/nuts.svg",
+  apricot:      "/assets/apricot.svg",
+  banana:       "/assets/banana.svg",
+  date:         "/assets/date.svg",
+  popcorn:      "/assets/popcorn.svg",
+  chex:         "/assets/chex.svg",
+  pistachios:   "/assets/pistachios.svg",
+};
+
 function Ingredient({ type, className = "" }: { type: string; className?: string }) {
-  if (type === "pretzel") return <span className={`ingredient pretzel ${className}`}>◎</span>;
-  if (type === "almond") return <span className={`ingredient almond ${className}`} />;
-  if (type === "raisin") return <span className={`ingredient raisin ${className}`} />;
-  if (type === "seed") return <span className={`ingredient seed ${className}`} />;
-  if (type === "candy") return <span className={`ingredient candy ${className}`} />;
-  return <span className={`ingredient chocolate ${className}`} />;
+  const src = ingredientIcons[type];
+  if (src) return <img alt={type} className={`ingredient ${type} ${className}`} src={src} />;
+  return <span className={`ingredient ${className}`} />;
 }
 
 function Result({
@@ -862,9 +891,9 @@ function Result({
 }) {
   const choices = details.map((detail) => detailOptions[detail]);
   const mix = useMemo(() => [
-    "almond", "candy", "raisin", "pretzel", "seed", "chocolate",
-    "candy", "almond", "raisin", "seed", "pretzel", "chocolate",
-    "raisin", "candy", "almond", "seed", "pretzel",
+    "almonds", "cranberries", "pretzel", "chocolate", "cashew", "dried-fruit",
+    "nuts", "almonds", "cranberries", "cashew", "pretzel", "chocolate",
+    "dried-fruit", "nuts", "almonds", "cashew", "pretzel",
   ], []);
 
   // Change 7: newly unlocked ingredient (UNLOCKED_COUNT is the index now unlocked)
@@ -918,10 +947,7 @@ function Result({
 
         {/* Change 7: newly unlocked ingredient */}
         <div className="new-unlock-row">
-          <span
-            className="new-unlock-dot"
-            style={{ background: newlyUnlocked.color }}
-          />
+          <img alt={newlyUnlocked.ingredient} className="new-unlock-img" src={newlyUnlocked.icon} />
           <div className="new-unlock-copy">
             <small>New ingredient unlocked</small>
             <b>{newlyUnlocked.ingredient}</b>
