@@ -1,24 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-
-type Trail = {
-  name: string;
-  meta: string;
-  image: string;
-};
-
-const trailPhotos = [
-  "https://images.unsplash.com/photo-1642746194421-8a5e8eabf323?auto=format&fit=crop&w=900&q=88",
-  "https://images.unsplash.com/photo-1603642696724-f522cbcca174?auto=format&fit=crop&w=900&q=88",
-  "https://images.unsplash.com/photo-1605068533794-cd164042be22?auto=format&fit=crop&w=900&q=88",
-  "https://images.unsplash.com/photo-1579912583830-cfec19b43150?auto=format&fit=crop&w=900&q=88",
-];
-
-const trails: Trail[] = [
-  { name: "Bommer Canyon Loop", meta: "4.2 mi · 560 ft · Moderate", image: trailPhotos[0] },
-  { name: "Top of the World", meta: "2.4 mi · 510 ft · Moderate", image: trailPhotos[1] },
-  { name: "Holy Jim Falls", meta: "2.8 mi · 650 ft · Moderate", image: trailPhotos[2] },
-  { name: "Crystal Cove Moro Ridge", meta: "5.0 mi · 820 ft · Hard", image: trailPhotos[3] },
-];
+import BottomNav, { type Tab } from "./components/BottomNav";
+import Feed from "./components/Feed";
+import { initialFeedPosts, type FeedPost } from "./data/feedPosts";
+import { trailPhotos, trails, type Trail } from "./data/trails";
 
 const detailOptions = [
   { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
@@ -337,7 +321,7 @@ function Shell({
   children,
   onBack,
 }: {
-  step: number;
+  step?: number;
   children: React.ReactNode;
   onBack?: () => void;
 }) {
@@ -364,7 +348,7 @@ function Shell({
         </div>
         <span className="header-spacer" />
       </header>
-      <Progress step={step} />
+      {step !== undefined && <Progress step={step} />}
       {children}
     </main>
   );
@@ -1006,7 +990,53 @@ function Result({
   );
 }
 
+function ProfilePlaceholder() {
+  return (
+    <section className="screen-content profile-screen">
+      <span className="profile-avatar">A</span>
+      <span className="eyebrow">@alex.hikes</span>
+      <h1>Profile coming soon</h1>
+      <p>Your jar, rankings and saved hikes will live here.</p>
+      <Squirrel mood="eager" small />
+    </section>
+  );
+}
+
 export default function App() {
+  const [tab, setTab] = useState<Tab>("feed");
+  const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
+
+  const switchTab = (next: Tab) => {
+    setTab(next);
+    window.scrollTo({ top: 0 });
+  };
+
+  const updatePost = (id: string, update: (post: FeedPost) => FeedPost) => {
+    setPosts((current) => current.map((post) => (post.id === id ? update(post) : post)));
+  };
+
+  return (
+    <>
+      {tab === "feed" && (
+        <Shell>
+          <Feed onUpdatePost={updatePost} posts={posts} />
+        </Shell>
+      )}
+      {tab === "profile" && (
+        <Shell>
+          <ProfilePlaceholder />
+        </Shell>
+      )}
+      {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
+      <div hidden={tab !== "log"}>
+        <LogHikeFlow />
+      </div>
+      <BottomNav active={tab} onChange={switchTab} />
+    </>
+  );
+}
+
+function LogHikeFlow() {
   const [step, setStep] = useState(1);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const [rating, setRating] = useState("");
