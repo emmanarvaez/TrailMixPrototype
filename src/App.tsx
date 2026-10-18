@@ -1070,6 +1070,7 @@ function ProfilePlaceholder() {
 }
 
 export default function App() {
+  document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
   const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
 
