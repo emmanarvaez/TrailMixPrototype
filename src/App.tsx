@@ -8,7 +8,6 @@ const detailOptions = [
   { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
   { label: "Waterfall",  ingredient: "Dried Fruit", color: "#6b405f", shape: "dried-fruit", icon: "/assets/dried-fruit.svg" },
   { label: "Climb",      ingredient: "Almonds",     color: "#d7a15f", shape: "almonds",    icon: "/assets/almonds.svg" },
-  { label: "Wildlife",   ingredient: "Cashews",     color: "#c8a04a", shape: "cashew",     icon: "/assets/cashew.svg" },
   { label: "Sunset",     ingredient: "Cranberries", color: "#c94f3a", shape: "cranberries",icon: "/assets/cranberries.svg" },
   { label: "Rocky",      ingredient: "Pretzels",    color: "#bd783f", shape: "pretzel",    icon: "/assets/pretzel.svg" },
   { label: "Forest",     ingredient: "Nuts",        color: "#5a7a3a", shape: "nuts",       icon: "/assets/nuts.svg" },
@@ -68,7 +67,7 @@ function getResultVariant(rank: number, total: number): MascotVariant {
 
 // Ingredients unlocked before this hike (one per previously completed hike).
 // Index UNLOCKED_COUNT is the ingredient this hike unlocks.
-const UNLOCKED_COUNT = 8;
+const UNLOCKED_COUNT = 7;
 
 function GlobalStyles() {
   return (
@@ -81,9 +80,9 @@ function GlobalStyles() {
       .speech-bubble {
         position: relative !important;
         cursor: default !important;
-        box-shadow: none !important;
-        border: none !important;
-        background: #fff8f0 !important;
+        background: #fffcf7 !important;
+        border: 1.5px solid #d4b48a !important;
+        box-shadow: 0 3px 10px rgba(100,60,20,0.14) !important;
         border-radius: 14px !important;
         padding: 8px 14px !important;
         font-weight: 600;
@@ -91,14 +90,25 @@ function GlobalStyles() {
       }
       .speech-bubble-tail {
         position: absolute;
-        bottom: -9px;
+        bottom: -11px;
         right: 16px;
         width: 0;
         height: 0;
         border-left: 7px solid transparent;
         border-right: 7px solid transparent;
-        border-top: 10px solid #fff8f0;
+        border-top: 11px solid #d4b48a;
         pointer-events: none;
+      }
+      .speech-bubble-tail::after {
+        content: '';
+        position: absolute;
+        bottom: 2px;
+        left: -6px;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 10px solid #fffcf7;
       }
 
       /* ── Change 2: drag hint ── */
@@ -552,7 +562,7 @@ function RateTrail({
           />
           <div className="difficulty-labels"><span>Easy</span><span>Moderate</span><span>Tough</span></div>
         </div>
-        <Mascot key={ratingVariant} small variant={ratingVariant} />
+        <Mascot key={ratingVariant} small={ratingVariant === "default"} variant={ratingVariant} />
       </section>
       <div className="sticky-action">
         <Button disabled={!rating} onClick={onNext}>Next</Button>
