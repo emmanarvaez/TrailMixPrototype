@@ -44,6 +44,44 @@ const ratings = [
 
 const availableFriends = ["Caine", "Kaylee", "Oscar", "Amanda", "Emma"];
 
+type MascotVariant =
+  | "default" | "loved-it" | "its-fine" | "not-for-me" | "thinking"
+  | "stuffed-cheeks" | "toss" | "celebrate" | "summit" | "hiker"
+  | "sleepy" | "oops";
+
+const mascotData: Record<MascotVariant, { src: string; lines: string[] }> = {
+  "default":        { src: "/assets/cashew-01-default.svg",       lines: ["Ooh, where'd you go today?", "New hike? Tell me everything.", "I smell a new trail on you."] },
+  "loved-it":       { src: "/assets/cashew-02-loved-it.svg",      lines: ["Ahh, a good one! I can tell.", "Say less. I'm already jealous.", "That's going in the good snack pile."] },
+  "its-fine":       { src: "/assets/cashew-03-its-fine.svg",      lines: ["Not bad. Solid trail snack.", "A perfectly decent hike. Respect.", "Middle of the bag. Like a peanut."] },
+  "not-for-me":     { src: "/assets/cashew-04-not-for-me.svg",    lines: ["Oof. We don't have to talk about it.", "Can't love every trail. Or every raisin.", "Noted. We won't go back."] },
+  "thinking":       { src: "/assets/cashew-05-thinking.svg",      lines: ["Hmm, where does this one go?", "Higher or lower? Take your time.", "Is it summit worthy? Drag it up and see."] },
+  "stuffed-cheeks": { src: "/assets/cashew-06-stuffed-cheeks.svg",lines: ["Mmf... saving your hike...", "Hold on, my mouth is full.", "Stashing this for later..."] },
+  "toss":           { src: "/assets/cashew-07-toss.svg",          lines: ["{ingredient} for the mix!", "Into the jar it goes!", "One {ingredient}, coming right up."] },
+  "celebrate":      { src: "/assets/cashew-08-celebrate.svg",     lines: ["{trail} is #{rank}! Big hike energy.", "Look at your mix growing!", "New ingredient unlocked. I'm so proud."] },
+  "summit":         { src: "/assets/cashew-09-summit.svg",        lines: ["New summit! {trail} is your #1!", "We have a new champion!", "Top of the mountain, baby."] },
+  "hiker":          { src: "/assets/cashew-10-hiker.svg",         lines: ["Ready when you are, trail buddy.", "Lace up. Snacks packed. Let's go.", "Every hike adds to your mix."] },
+  "sleepy":         { src: "/assets/cashew-11-sleepy.svg",        lines: ["Zzz... wake me when you hike.", "No hikes yet. My jar is so empty.", "It's quiet in here. Too quiet."] },
+  "oops":           { src: "/assets/cashew-12-oops.svg",          lines: ["Oops! I dropped something. Try again?", "That didn't work. Not your fault. Probably mine.", "Hmm, can't find that trail. Want to add it?"] },
+};
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function applyVars(line: string, vars: { trail?: string; rank?: number; ingredient?: string }): string {
+  return line
+    .replace("{trail}", vars.trail ?? "")
+    .replace("{rank}", vars.rank != null ? String(vars.rank) : "")
+    .replace("{ingredient}", vars.ingredient ?? "");
+}
+
+function getResultVariant(rank: number, total: number): MascotVariant {
+  if (rank === 1) return "summit";
+  if (rank <= Math.ceil(total / 3)) return "celebrate";
+  if (rank <= Math.ceil((2 * total) / 3)) return "its-fine";
+  return "not-for-me";
+}
+
 // Ingredients unlocked before this hike (one per previously completed hike).
 // Index UNLOCKED_COUNT is the ingredient this hike unlocks.
 const UNLOCKED_COUNT = 8;
@@ -370,18 +408,31 @@ function Shell({
   );
 }
 
-function Squirrel({ mood = "eager", small = false }: { mood?: "eager" | "wow" | "down"; small?: boolean }) {
+function Mascot({
+  variant,
+  small = false,
+  trail,
+  rank,
+  ingredient,
+}: {
+  variant: MascotVariant;
+  small?: boolean;
+  trail?: string;
+  rank?: number;
+  ingredient?: string;
+}) {
+  const data = mascotData[variant];
+  const [line] = useState(() => applyVars(pickRandom(data.lines), { trail, rank, ingredient }));
   const size = small ? 72 : 120;
-  const style = {
-    width: size,
-    height: "auto",
-    display: "block",
-    transition: "transform 0.3s ease",
-    ...(mood === "eager" && { transform: "rotate(-8deg)" }),
-    ...(mood === "wow"   && { transform: "rotate(-12deg) scale(1.15)", filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.18))" }),
-    ...(mood === "down"  && { transform: "rotate(14deg)", opacity: 0.7 }),
-  };
-  return <img alt="TrailMix mascot" src="/assets/cashew.svg" style={style} />;
+  return (
+    <div className="mascot-prompt">
+      <div className="speech-bubble">
+        {line}
+        <span className="speech-bubble-tail" />
+      </div>
+      <img alt="TrailMix mascot" src={data.src} style={{ width: size, height: "auto", display: "block" }} />
+    </div>
+  );
 }
 
 function Button({
@@ -422,6 +473,7 @@ function TrailSelect({
           <span className="eyebrow">Pick your path</span>
           <h1>Which trail did you hike</h1>
         </div>
+        <Mascot variant="default" />
         <label className="search-field">
           <span aria-hidden="true">⌕</span>
           <input onChange={(event) => setQuery(event.target.value)} placeholder="Search trails" value={query} />
@@ -474,6 +526,11 @@ function RateTrail({
   onNext: () => void;
   onBack: () => void;
 }) {
+  const ratingVariant: MascotVariant =
+    rating === "Loved it!" ? "loved-it" :
+    rating === "It was fine" ? "its-fine" :
+    rating === "Not for me" ? "not-for-me" :
+    "default";
   return (
     <Shell onBack={onBack} step={2}>
       <section className="screen-content rate-screen">
@@ -511,14 +568,7 @@ function RateTrail({
           />
           <div className="difficulty-labels"><span>Easy</span><span>Moderate</span><span>Tough</span></div>
         </div>
-        {/* Change 1: speech bubble — not a button, no hover/press states, tail points at mascot */}
-        <div className="mascot-prompt">
-          <div className="speech-bubble">
-            Spill it!
-            <span className="speech-bubble-tail" />
-          </div>
-          <Squirrel small />
-        </div>
+        <Mascot key={ratingVariant} small variant={ratingVariant} />
       </section>
       <div className="sticky-action">
         <Button disabled={!rating} onClick={onNext}>Next</Button>
@@ -666,9 +716,10 @@ function RankTrail({
               )}
               <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
             </div>
+            {!hasDragged && <Mascot small variant="thinking" />}
             <button className="lower-ranks-button" onClick={openLowerRanks}>
               <span><b>Didn't make the top four?</b><small>Rank it with the rest of your hikes</small></span>
-              <Squirrel mood="down" small />
+              <img alt="" src="/assets/cashew-04-not-for-me.svg" style={{ width: 52, height: "auto" }} />
             </button>
           </>
         ) : (
@@ -787,6 +838,14 @@ function AddDetails({
             })}
           </div>
         </div>
+        {selectedDetails.length > 0 && (
+          <Mascot
+            key={selectedDetails[selectedDetails.length - 1]}
+            ingredient={detailOptions[selectedDetails[selectedDetails.length - 1]]?.ingredient}
+            small
+            variant="toss"
+          />
+        )}
         <div className="field-group">
           <div className="section-heading"><h2>Photos</h2><span>2 added</span></div>
           <div className="photo-row">
@@ -909,6 +968,7 @@ function Result({
   // Stats
   const totalHikes = ranking.length + lowerRanking.length;
   const miles = trail.meta.split("·")[0].trim();
+  const resultVariant = getResultVariant(rank, totalHikes);
 
   // Full ranked list combining mountain + lower ranks
   const allRanked = [...ranking, ...lowerRanking];
@@ -926,7 +986,7 @@ function Result({
         </div>
         <div className="jar-stage">
           <div className="reaction-burst"><span>!</span></div>
-          <Squirrel mood="wow" />
+          <img alt="TrailMix mascot" src={mascotData[resultVariant].src} style={{ width: 90, height: "auto", display: "block" }} />
           {choices.map((choice, index) => (
             <div className={`falling-wrap fall-${index % 3}`} key={choice.ingredient}>
               <Ingredient className="falling-ingredient" type={choice.shape} />
@@ -951,6 +1011,12 @@ function Result({
           <b>#{rank}</b>
           <small>in your personal rankings</small>
         </div>
+        <Mascot
+          ingredient={choices[0]?.ingredient}
+          rank={rank}
+          trail={trail.name}
+          variant={resultVariant}
+        />
 
         {/* Change 7: newly unlocked ingredient */}
         <div className="new-unlock-row">
