@@ -417,7 +417,7 @@ function Mascot({
 }) {
   const data = mascotData[variant];
   const [line] = useState(() => applyVars(pickRandom(data.lines), { trail, rank, ingredient }));
-  const size = small ? 72 : 120;
+  const size = small ? 144 : 144;
   return (
     <div className="mascot-prompt">
       <div className="speech-bubble">
@@ -562,7 +562,7 @@ function RateTrail({
           />
           <div className="difficulty-labels"><span>Easy</span><span>Moderate</span><span>Tough</span></div>
         </div>
-        <Mascot key={ratingVariant} small={ratingVariant === "default"} variant={ratingVariant} />
+        <Mascot key={ratingVariant} variant={ratingVariant} />
       </section>
       <div className="sticky-action">
         <Button disabled={!rating} onClick={onNext}>Next</Button>
@@ -697,23 +697,16 @@ function RankTrail({
                   );
                 })}
               </div>
-              {/* Change 2: first-time hint label */}
-              {!hasDragged && (
-                <div className="drag-first-hint">
-                  <span style={{ fontSize: 14 }}>✋</span>
-                  <span>Drag me up or down</span>
-                </div>
-              )}
               {/* Change 2: live context during drag */}
               {dragContext && (
                 <div className="drag-context-strip">{dragContext}</div>
               )}
               <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
             </div>
-            {!hasDragged && <Mascot small variant="thinking" />}
+            {!hasDragged && <Mascot variant="thinking" />}
             <button className="lower-ranks-button" onClick={openLowerRanks}>
               <span><b>Didn't make the top four?</b><small>Rank it with the rest of your hikes</small></span>
-              <img alt="" src="/assets/cashew-04-not-for-me.svg" style={{ width: 52, height: "auto" }} />
+              <img alt="" src="/assets/cashew-04-not-for-me.svg" style={{ width: 80, height: "auto" }} />
             </button>
           </>
         ) : (
@@ -836,7 +829,6 @@ function AddDetails({
           <Mascot
             key={selectedDetails[selectedDetails.length - 1]}
             ingredient={detailOptions[selectedDetails[selectedDetails.length - 1]]?.ingredient}
-            small
             variant="toss"
           />
         )}
@@ -980,7 +972,6 @@ function Result({
         </div>
         <div className="jar-stage">
           <div className="reaction-burst"><span>!</span></div>
-          <img alt="TrailMix mascot" src={mascotData[resultVariant].src} style={{ width: 90, height: "auto", display: "block" }} />
           {choices.map((choice, index) => (
             <div className={`falling-wrap fall-${index % 3}`} key={choice.ingredient}>
               <Ingredient className="falling-ingredient" type={choice.shape} />
@@ -1073,7 +1064,7 @@ function ProfilePlaceholder() {
       <span className="eyebrow">@alex.hikes</span>
       <h1>Profile coming soon</h1>
       <p>Your jar, rankings and saved hikes will live here.</p>
-      <Squirrel mood="eager" small />
+      <Mascot variant="hiker" />
     </section>
   );
 }
