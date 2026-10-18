@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
+import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import { initialFeedPosts, type FeedPost } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
@@ -990,14 +991,15 @@ function Result({
   );
 }
 
-function ProfilePlaceholder() {
+function ProfilePlaceholder({ user, onSignOut }: { user: AuthUser; onSignOut: () => void }) {
   return (
     <section className="screen-content profile-screen">
-      <span className="profile-avatar">A</span>
-      <span className="eyebrow">@alex.hikes</span>
+      <span className="profile-avatar">{user.name.charAt(0).toUpperCase()}</span>
+      <span className="eyebrow">{user.name}</span>
       <h1>Profile coming soon</h1>
       <p>Your jar, rankings and saved hikes will live here.</p>
       <Squirrel mood="eager" small />
+      <button className="auth-signout" onClick={onSignOut} type="button">Sign out</button>
     </section>
   );
 }
@@ -1005,6 +1007,7 @@ function ProfilePlaceholder() {
 export default function App() {
   const [tab, setTab] = useState<Tab>("feed");
   const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
   const switchTab = (next: Tab) => {
     setTab(next);
@@ -1015,6 +1018,8 @@ export default function App() {
     setPosts((current) => current.map((post) => (post.id === id ? update(post) : post)));
   };
 
+  if (!user) return <Authpage onAuthenticated={setUser} />;
+
   return (
     <>
       {tab === "feed" && (
@@ -1024,7 +1029,7 @@ export default function App() {
       )}
       {tab === "profile" && (
         <Shell>
-          <ProfilePlaceholder />
+          <ProfilePlaceholder user={user} onSignOut={() => { setUser(null); setTab("feed"); }} />
         </Shell>
       )}
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
