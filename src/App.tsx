@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
-import { initialFeedPosts, type FeedPost } from "./data/feedPosts";
+import Profile from "./components/Profile";
+import { friends, initialFeedPosts, type FeedPost } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
 
 const detailOptions = [
@@ -754,6 +755,8 @@ function AddDetails({
   setSelectedDetails,
   caption,
   setCaption,
+  taggedFriends,
+  setTaggedFriends,
   onSave,
   onBack,
 }: {
@@ -761,12 +764,13 @@ function AddDetails({
   setSelectedDetails: (indexes: number[]) => void;
   caption: string;
   setCaption: (caption: string) => void;
+  taggedFriends: string[];
+  setTaggedFriends: (names: string[]) => void;
   onSave: () => void;
   onBack: () => void;
 }) {
   const [added, setAdded] = useState(false);
   const [friend, setFriend] = useState("");
-  const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
   const friendSuggestions = friend.trim()
     ? availableFriends.filter(
         (name) =>
@@ -1058,24 +1062,12 @@ function Result({
   );
 }
 
-function ProfilePlaceholder({ user, onSignOut }: { user: AuthUser; onSignOut: () => void }) {
-  return (
-    <section className="screen-content profile-screen">
-      <span className="profile-avatar">{user.name.charAt(0).toUpperCase()}</span>
-      <span className="eyebrow">{user.name}</span>
-      <h1>Profile coming soon</h1>
-      <p>Your jar, rankings and saved hikes will live here.</p>
-      <Mascot variant="hiker" />
-      <button className="auth-signout" onClick={onSignOut} type="button">Sign out</button>
-    </section>
-  );
-}
-
 export default function App() {
   document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
   const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [friendUsernames, setFriendUsernames] = useState(() => Object.values(friends).map((friend) => friend.username));
 
   const switchTab = (next: Tab) => {
     setTab(next);
@@ -1084,6 +1076,12 @@ export default function App() {
 
   const updatePost = (id: string, update: (post: FeedPost) => FeedPost) => {
     setPosts((current) => current.map((post) => (post.id === id ? update(post) : post)));
+  };
+
+  const toggleFriend = (username: string) => {
+    setFriendUsernames((current) =>
+      current.includes(username) ? current.filter((friend) => friend !== username) : [...current, username],
+    );
   };
 
   if (!user) return <Authpage onAuthenticated={setUser} />;
@@ -1097,19 +1095,33 @@ export default function App() {
       )}
       {tab === "profile" && (
         <Shell>
-          <ProfilePlaceholder user={user} onSignOut={() => { setUser(null); setTab("feed"); }} />
+          <Profile
+            onLogHike={() => switchTab("log")}
+            onSignOut={() => { setUser(null); setTab("feed"); }}
+            onToggleFriend={toggleFriend}
+            onUpdatePost={updatePost}
+            posts={posts}
+            friendUsernames={friendUsernames}
+            user={user}
+          />
         </Shell>
       )}
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
       <div hidden={tab !== "log"}>
-        <LogHikeFlow />
+        <LogHikeFlow
+          onLogHike={(post) => {
+            setPosts((current) => [post, ...current]);
+            switchTab("profile");
+          }}
+          user={user}
+        />
       </div>
       <BottomNav active={tab} onChange={switchTab} />
     </>
   );
 }
 
-function LogHikeFlow() {
+function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void; user: AuthUser }) {
   const [step, setStep] = useState(1);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const [rating, setRating] = useState("");
@@ -1132,6 +1144,7 @@ function LogHikeFlow() {
   ]);
   const [selectedDetails, setSelectedDetails] = useState<number[]>([0]);
   const [caption, setCaption] = useState("");
+  const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
 
   const go = (next: number) => {
     setStep(next);
@@ -1141,16 +1154,35 @@ function LogHikeFlow() {
   if (step === 1) return <TrailSelect onNext={() => go(2)} selected={selectedTrail} setSelected={setSelectedTrail} />;
   if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={() => go(3)} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={selectedTrail ?? trails[0]} />;
   if (step === 3) return <RankTrail lowerRanking={lowerRanking} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} />;
-  if (step === 4) return <AddDetails caption={caption} onBack={() => go(3)} onSave={() => go(5)} selectedDetails={selectedDetails} setCaption={setCaption} setSelectedDetails={setSelectedDetails} />;
+  if (step === 4) return <AddDetails caption={caption} onBack={() => go(3)} onSave={() => go(5)} selectedDetails={selectedDetails} setCaption={setCaption} setSelectedDetails={setSelectedDetails} setTaggedFriends={setTaggedFriends} taggedFriends={taggedFriends} />;
   return (
     <Result
       details={selectedDetails}
       lowerRanking={lowerRanking}
       onBack={() => go(4)}
       onRestart={() => {
+        const completedTrail = selectedTrail ?? trails[0];
+        onLogHike({
+          id: `post-${Date.now()}`,
+          friend: {
+            name: user.name,
+            username: user.email.split("@")[0].toLowerCase(),
+            color: "#e66a3c",
+          },
+          trail: completedTrail,
+          image: completedTrail.image,
+          caption: caption.trim() || `A day out on ${completedTrail.name}.`,
+          date: new Date().toISOString().slice(0, 10),
+          likes: 0,
+          liked: false,
+          saved: false,
+          taggedUsers: taggedFriends.map((name) => name.toLowerCase()),
+          comments: [],
+        });
         setRating("");
         setDifficulty(2);
         setCaption("");
+        setTaggedFriends([]);
         setSelectedDetails([0]);
         setSelectedTrail(null);
         go(1);
