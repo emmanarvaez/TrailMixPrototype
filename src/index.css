@@ -510,3 +510,49 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
   .sticky-action { bottom: calc(24px + var(--nav-h)); border-radius: 0; }
   .bottom-nav { left: 50%; right: auto; width: 430px; transform: translateX(-50%); bottom: 24px; height: var(--nav-h); padding-bottom: 6px; border-radius: 0 0 32px 32px; }
 }
+
+/* ── Settings ── */
+.header-settings { display: grid; place-items: center; color: var(--forest); transition: background .15s ease, transform .2s ease; }
+.header-settings svg { width: 24px; height: 24px; }
+.header-settings:hover { background: #ece4d3; }
+.header-settings:hover svg { transform: rotate(30deg); transition: transform .3s ease; }
+.profile-avatar img, .settings-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.settings-screen { padding: 8px 18px 32px; }
+.settings-title { margin-bottom: 20px; text-align: center; font-size: 26px; }
+.settings-photo { display: flex; flex-direction: column; align-items: center; gap: 14px; margin-bottom: 28px; }
+.settings-avatar {
+  width: 112px; height: 112px; border-radius: 50%; background: var(--orange); color: white; display: grid; place-items: center;
+  font-family: "Inter:Bold"; font-size: 44px; overflow: hidden; box-shadow: 0 0 0 4px var(--cream), 0 0 0 7px var(--sage);
+}
+.settings-photo-button {
+  min-height: 42px; padding: 0 18px; border: 1.5px solid var(--forest); border-radius: 14px; background: #fff9ec; color: var(--forest);
+  font-family: "Inter:Semi Bold"; font-size: 14px; box-shadow: 0 4px 0 #d0d5c5; transition: transform .15s ease, box-shadow .15s ease;
+}
+.settings-photo-button:hover { background: var(--pale-sage); }
+.settings-photo-button:active { transform: translateY(3px); box-shadow: 0 1px 0 #d0d5c5; }
+
+.settings-list { display: flex; flex-direction: column; gap: 18px; }
+.settings-field { display: flex; flex-direction: column; gap: 8px; }
+.settings-label { font-family: "Inter:Semi Bold"; font-size: 14px; color: var(--deep-forest); }
+.settings-bar {
+  width: 100%; min-height: 54px; display: flex; align-items: center; gap: 10px; padding: 0 16px; text-align: left;
+  border: 1.5px solid #d2cebe; border-radius: 16px; background: #fffaf0; box-shadow: 0 3px 0 #e3dccb;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.settings-bar:hover { border-color: var(--sage); background: #fffdf6; }
+.settings-bar:active { transform: translateY(2px); box-shadow: 0 1px 0 #e3dccb; }
+.settings-bar:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
+.settings-current { flex: 1; min-width: 0; color: #a3a69c; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-chevron { color: var(--muted); font-size: 24px; line-height: 1; }
+.settings-form { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1.5px solid var(--forest); border-radius: 16px; background: #fffaf0; animation: commentsIn .2s ease; }
+.settings-form input { min-height: 46px; padding: 0 13px; border: 1.5px solid #d2cebe; border-radius: 12px; background: white; outline: 0; font-size: 15px; }
+.settings-form input:focus { border-color: var(--forest); }
+.settings-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+.settings-form-actions button { min-height: 40px; padding: 0 16px; border-radius: 12px; font-family: "Inter:Semi Bold"; font-size: 13px; transition: transform .15s ease; }
+.settings-form-actions button:active { transform: scale(.96); }
+.settings-cancel { border: 1.5px solid #d2cebe; background: transparent; color: var(--muted); }
+.settings-save { border: 0; background: var(--forest); color: white; }
+.settings-error { margin: 0; color: #b5452a; font-size: 12px; }
+.settings-saved { margin: 0; color: var(--forest); font-size: 12px; font-family: "Inter:Semi Bold"; }

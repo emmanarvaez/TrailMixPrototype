@@ -67,7 +67,7 @@ export default function Profile({
     <section className="screen-content profile-screen">
       <header className="profile-heading">
         <div className="profile-identity">
-          <span aria-hidden="true" className="profile-avatar">{user.name.charAt(0).toUpperCase()}</span>
+          <span aria-hidden="true" className="profile-avatar">{user.avatar ? <img alt="" src={user.avatar} /> : user.name.charAt(0).toUpperCase()}</span>
           <div>
             <span className="eyebrow">TrailMix hiker</span>
             <h1>{user.name}</h1>

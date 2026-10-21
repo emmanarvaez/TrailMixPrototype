@@ -3,6 +3,8 @@ import { useState, type FormEvent } from "react";
 export type AuthUser = {
   name: string;
   email: string;
+  phone?: string;
+  avatar?: string; // image data URL
 };
 
 export default function Authpage({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {

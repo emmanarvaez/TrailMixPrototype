@@ -3,6 +3,7 @@ import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import Profile from "./components/Profile";
+import Settings from "./components/Settings";
 import { friends, initialFeedPosts, type FeedPost } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
 
@@ -370,10 +371,12 @@ function Shell({
   step,
   children,
   onBack,
+  headerAction,
 }: {
   step?: number;
   children: React.ReactNode;
   onBack?: () => void;
+  headerAction?: React.ReactNode;
 }) {
   return (
     <main className="app-shell">
@@ -396,7 +399,7 @@ function Shell({
             <path d="M40.5536 8.928L42.6416 5.772L40.5536 2.628H42.5456L43.6976 5.004H43.9016L45.0536 2.628H47.0336L44.9456 5.772L47.0576 8.928H45.0776L43.9016 6.54H43.6976L42.5456 8.928H40.5536Z" fill="#C2571F"/>
           </svg>
         </div>
-        <span className="header-spacer" />
+        {headerAction ?? <span className="header-spacer" />}
       </header>
       {step !== undefined && <Progress step={step} />}
       {children}
@@ -765,7 +768,7 @@ function AddDetails({
   caption: string;
   setCaption: (caption: string) => void;
   taggedFriends: string[];
-  setTaggedFriends: (names: string[]) => void;
+  setTaggedFriends: React.Dispatch<React.SetStateAction<string[]>>;
   onSave: () => void;
   onBack: () => void;
 }) {
@@ -1065,12 +1068,14 @@ function Result({
 export default function App() {
   document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
+  const [showSettings, setShowSettings] = useState(false);
   const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [friendUsernames, setFriendUsernames] = useState(() => Object.values(friends).map((friend) => friend.username));
 
   const switchTab = (next: Tab) => {
     setTab(next);
+    setShowSettings(false);
     window.scrollTo({ top: 0 });
   };
 
@@ -1093,11 +1098,25 @@ export default function App() {
           <Feed onUpdatePost={updatePost} posts={posts} />
         </Shell>
       )}
-      {tab === "profile" && (
-        <Shell>
+      {tab === "profile" && showSettings && (
+        <Shell onBack={() => setShowSettings(false)}>
+          <Settings onUpdateUser={(changes) => setUser({ ...user, ...changes })} user={user} />
+        </Shell>
+      )}
+      {tab === "profile" && !showSettings && (
+        <Shell
+          headerAction={
+            <button aria-label="Settings" className="header-back header-settings" onClick={() => { setShowSettings(true); window.scrollTo({ top: 0 }); }} type="button">
+              <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+              </svg>
+            </button>
+          }
+        >
           <Profile
             onLogHike={() => switchTab("log")}
-            onSignOut={() => { setUser(null); setTab("feed"); }}
+            onSignOut={() => { setUser(null); setTab("feed"); setShowSettings(false); }}
             onToggleFriend={toggleFriend}
             onUpdatePost={updatePost}
             posts={posts}
