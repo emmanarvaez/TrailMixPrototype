@@ -25,6 +25,7 @@ export type FeedPost = {
   liked: boolean;
   saved: boolean;
   comments: PostComment[];
+  taggedUsers?: string[];
 };
 
 export const currentUser: Friend = { name: "Alex", username: "alex.hikes", color: "#e66a3c" };
@@ -48,6 +49,7 @@ export const initialFeedPosts: FeedPost[] = [
     likes: 42,
     liked: false,
     saved: false,
+    taggedUsers: ["alex", "alex.hikes"],
     comments: [
       { id: "c-1", author: friends.emma, text: "No way, it's never running when I go 😭" },
       { id: "c-2", author: friends.caine, text: "Adding this to the list for next weekend" },
@@ -63,6 +65,7 @@ export const initialFeedPosts: FeedPost[] = [
     likes: 37,
     liked: false,
     saved: false,
+    taggedUsers: ["alex", "alex.hikes"],
     comments: [{ id: "c-3", author: friends.amanda, text: "Golden hour king 👑" }],
   },
   {

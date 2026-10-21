@@ -25,7 +25,7 @@ const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
   },
   {
     id: "accomplishments",
-    label: "Peaks",
+    label: "Accomplishments",
     icon: (
       <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
         <path d="M12 2 22 22H2L12 2Z" />
