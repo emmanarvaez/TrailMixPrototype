@@ -142,6 +142,25 @@ function GlobalStyles() {
         border-top: 10px solid #fffcf7;
       }
 
+      /* ── Bottom nav: ensure 4 tabs fit ── */
+      .bottom-nav {
+        display: flex !important;
+      }
+      .nav-tab {
+        flex: 1 !important;
+        min-width: 0 !important;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+        font-size: 10px !important;
+      }
+      .nav-tab span {
+        font-size: 10px !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: nowrap !important;
+        max-width: 100% !important;
+      }
+
       /* ── Change 2: drag hint ── */
       @keyframes bounce-hint {
         0%, 100% { transform: translateY(0); }
