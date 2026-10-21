@@ -1586,40 +1586,34 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
                   <Ingredient className={`piece piece-${i}`} key={i} type={type} />
                 ))}
               </div>
-              <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>Alex's jar</small></div>
+              <div className="jar-label"><b>TRAIL</b><span>MIX</span></div>
             </div>
             <div className="ground-shadow" />
           </div>
           <div className="accom-ingredient-categories">
-            {ingredientCategories.map((cat) => (
-              <div className="accom-category" key={cat.label}>
-                <h3>{cat.label}</h3>
-                <div className="accom-ingredient-grid">
-                  {cat.indices.map((idx) => {
-                    const opt = detailOptions[idx];
-                    const isUnlocked = idx < UNLOCKED_COUNT;
-                    const hikeCount = hikesForIngredient(idx).length;
-                    return (
-                      <div
-                        className={`accom-ingredient-cell ${isUnlocked ? "unlocked" : "locked"}`}
-                        key={idx}
-                        onClick={() => { if (isUnlocked) setSelectedIngredient(idx); }}
-                      >
-                        {isUnlocked ? (
-                          <img alt={opt.ingredient} src={opt.icon} />
-                        ) : (
-                          <div className="ai-lock">🔒</div>
-                        )}
-                        <span className="ai-name">{opt.ingredient}</span>
-                        {isUnlocked ? (
-                          <span className="ai-count">{hikeCount} {hikeCount === 1 ? "hike" : "hikes"}</span>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+            <div className="accom-ingredient-grid">
+              {detailOptions.map((opt, idx) => {
+                const isUnlocked = idx < UNLOCKED_COUNT;
+                const hikeCount = hikesForIngredient(idx).length;
+                return (
+                  <div
+                    className={`accom-ingredient-cell ${isUnlocked ? "unlocked" : "locked"}`}
+                    key={idx}
+                    onClick={() => { if (isUnlocked) setSelectedIngredient(idx); }}
+                  >
+                    {isUnlocked ? (
+                      <img alt={opt.ingredient} src={opt.icon} />
+                    ) : (
+                      <div className="ai-lock">🔒</div>
+                    )}
+                    <span className="ai-name">{opt.ingredient}</span>
+                    {isUnlocked ? (
+                      <span className="ai-count">{hikeCount} {hikeCount === 1 ? "hike" : "hikes"}</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
