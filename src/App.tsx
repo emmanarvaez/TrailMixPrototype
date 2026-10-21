@@ -564,9 +564,12 @@ function GlobalStyles() {
         display: block;
       }
       .accom-jar-stage {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+        position: relative !important;
+        height: 280px !important;
+        width: 100% !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: flex-end !important;
       }
       .accom-ingredient-categories {
         padding: 16px 16px 0;
