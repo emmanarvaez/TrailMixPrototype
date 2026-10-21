@@ -5,9 +5,11 @@ import { currentUser, type FeedPost } from "../data/feedPosts";
 export default function Feed({
   posts,
   onUpdatePost,
+  onDeletePost,
 }: {
   posts: FeedPost[];
   onUpdatePost: (id: string, update: (post: FeedPost) => FeedPost) => void;
+  onDeletePost: (post: FeedPost) => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
   const search = query.trim().toLowerCase();
@@ -55,6 +57,7 @@ export default function Feed({
                   likes: current.likes + (current.liked ? -1 : 1),
                 }))
               }
+              onDelete={post.logId ? () => onDeletePost(post) : undefined}
               onToggleSave={() => onUpdatePost(post.id, (current) => ({ ...current, saved: !current.saved }))}
               post={post}
             />

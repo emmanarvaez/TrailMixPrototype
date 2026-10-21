@@ -25,6 +25,14 @@ function BookmarkIcon({ filled }: { filled: boolean }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 12.5a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5A1 1 0 0 1 10 3.5h4a1 1 0 0 1 1 1V7" />
+    </svg>
+  );
+}
+
 function formatDate(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -38,13 +46,18 @@ export default function HikePost({
   onToggleLike,
   onToggleSave,
   onAddComment,
+  onDelete,
 }: {
   post: FeedPost;
   onToggleLike: () => void;
   onToggleSave: () => void;
   onAddComment: (text: string) => void;
+  onDelete?: () => Promise<void>; // only passed for the user's own posts
 }) {
   const [showComments, setShowComments] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
   const { friend, trail } = post;
@@ -55,6 +68,18 @@ export default function HikePost({
     if (!text) return;
     onAddComment(text);
     setDraft("");
+  };
+
+  const confirmDelete = async () => {
+    if (!onDelete) return;
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await onDelete();
+    } catch (error) {
+      setDeleteError(error && typeof error === "object" && "message" in error ? String(error.message) : "Something went wrong.");
+      setDeleting(false);
+    }
   };
 
   // Double-tap the photo to like (never unlikes), like Instagram.
@@ -119,7 +144,34 @@ export default function HikePost({
         >
           <BookmarkIcon filled={post.saved} />
         </button>
+        {onDelete && (
+          <button
+            aria-expanded={confirmingDelete}
+            aria-label="Delete post"
+            className={`post-action delete ${confirmingDelete ? "open" : ""}`}
+            onClick={() => { setConfirmingDelete((open) => !open); setDeleteError(""); }}
+            type="button"
+          >
+            <TrashIcon />
+          </button>
+        )}
       </div>
+
+      {confirmingDelete && (
+        <div className="post-delete-confirm" role="alertdialog" aria-label="Delete this hike?">
+          <p>
+            <b>Delete this hike?</b>
+            It'll be removed from your posts, rankings and trail mix. This can't be undone.
+          </p>
+          {deleteError && <p className="post-delete-error" role="alert">Couldn't delete: {deleteError}</p>}
+          <div className="post-delete-buttons">
+            <button disabled={deleting} onClick={() => setConfirmingDelete(false)} type="button">Cancel</button>
+            <button className="danger" disabled={deleting} onClick={confirmDelete} type="button">
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="post-body">
         <div className="post-counts">

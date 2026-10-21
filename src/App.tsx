@@ -7,6 +7,7 @@ import Settings from "./components/Settings";
 import { friends, initialFeedPosts, type FeedPost } from "./data/feedPosts";
 import { type Trail } from "./data/trails";
 import {
+  deleteHikeLog,
   fetchHikeLogs,
   fetchTrails,
   fetchUnlockedIngredients,
@@ -1829,6 +1830,12 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
+  // Throws if the hike can't be deleted, so the post can show the error and stay put
+  const deletePost = async (post: FeedPost) => {
+    if (post.logId && user) await deleteHikeLog(user.id, post.logId);
+    setPosts((current) => current.filter((item) => item.id !== post.id));
+  };
+
   const updatePost = (id: string, update: (post: FeedPost) => FeedPost) => {
     setPosts((current) => current.map((post) => (post.id === id ? update(post) : post)));
   };
@@ -1845,7 +1852,7 @@ export default function App() {
     <>
       {tab === "feed" && (
         <Shell>
-          <Feed onUpdatePost={updatePost} posts={posts} />
+          <Feed onDeletePost={deletePost} onUpdatePost={updatePost} posts={posts} />
         </Shell>
       )}
       {tab === "accomplishments" && (
@@ -1870,6 +1877,7 @@ export default function App() {
           }
         >
           <Profile
+            onDeletePost={deletePost}
             onLogHike={() => switchTab("log")}
             onSignOut={() => { setUser(null); setTab("feed"); setShowSettings(false); }}
             onToggleFriend={toggleFriend}
@@ -1914,7 +1922,7 @@ function LogHikeFlow({ active, onLogHike, user }: { active: boolean; onLogHike: 
   const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [saved, setSaved] = useState<{ photoUrls: string[]; unlockIndex: number | null; previousShapes: string[] } | null>(null);
+  const [saved, setSaved] = useState<{ logId: string; photoUrls: string[]; unlockIndex: number | null; previousShapes: string[] } | null>(null);
 
   useEffect(() => {
     fetchTrails().then(setTrails).catch((error) => setTrailsError(errorMessage(error)));
@@ -1958,7 +1966,7 @@ function LogHikeFlow({ active, onLogHike, user }: { active: boolean; onLogHike: 
     setSaveError("");
     try {
       const unlockIndex = nextUnlockIndex(unlockedKeys);
-      const { photoUrls } = await saveHikeLog({
+      const { logId, photoUrls } = await saveHikeLog({
         userId: user.id,
         trail: selectedTrail,
         date: todayISO(),
@@ -1973,7 +1981,7 @@ function LogHikeFlow({ active, onLogHike, user }: { active: boolean; onLogHike: 
         photos,
         unlockedIngredient: unlockIndex !== null ? detailOptions[unlockIndex].shape : null,
       });
-      setSaved({ photoUrls, unlockIndex, previousShapes: hikeShapes(pastLogs) });
+      setSaved({ logId, photoUrls, unlockIndex, previousShapes: hikeShapes(pastLogs) });
       go(5);
     } catch (error) {
       setSaveError(`Couldn't save your hike: ${errorMessage(error)}`);
@@ -2026,6 +2034,7 @@ function LogHikeFlow({ active, onLogHike, user }: { active: boolean; onLogHike: 
           saved: false,
           taggedUsers: taggedFriends.map((name) => name.toLowerCase()),
           comments: [],
+          logId: saved.logId,
         });
         setRating("");
         setDifficulty(2);

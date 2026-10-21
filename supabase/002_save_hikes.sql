@@ -38,6 +38,12 @@ create policy "Users can upload their own hike photos"
   on storage.objects for insert to authenticated
   with check (bucket_id = 'hike-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
+-- Removing a file needs select as well as delete permission
+drop policy if exists "Users can see their own hike photos" on storage.objects;
+create policy "Users can see their own hike photos"
+  on storage.objects for select to authenticated
+  using (bucket_id = 'hike-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
 drop policy if exists "Users can delete their own hike photos" on storage.objects;
 create policy "Users can delete their own hike photos"
   on storage.objects for delete to authenticated

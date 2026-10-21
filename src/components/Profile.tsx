@@ -15,6 +15,7 @@ export default function Profile({
   user,
   posts,
   onUpdatePost,
+  onDeletePost,
   onLogHike,
   onSignOut,
   friendUsernames,
@@ -23,6 +24,7 @@ export default function Profile({
   user: AuthUser;
   posts: FeedPost[];
   onUpdatePost: (id: string, update: (post: FeedPost) => FeedPost) => void;
+  onDeletePost: (post: FeedPost) => Promise<void>;
   onLogHike: () => void;
   onSignOut: () => void;
   friendUsernames: string[];
@@ -58,6 +60,7 @@ export default function Profile({
           likes: current.likes + (current.liked ? -1 : 1),
         }))
       }
+      onDelete={post.logId ? () => onDeletePost(post) : undefined}
       onToggleSave={() => onUpdatePost(post.id, (current) => ({ ...current, saved: !current.saved }))}
       post={post}
     />

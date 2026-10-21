@@ -111,6 +111,27 @@ export async function saveRanking(ordered: HikeLog[]): Promise<HikeLog[]> {
   return ordered.map((log, index) => ({ ...log, rank: index + 1 }));
 }
 
+// Deletes a hike and everything attached to it (photos, tags, comments, likes cascade in the database),
+// then closes the gap it leaves in the user's rankings
+export async function deleteHikeLog(userId: string, logId: string): Promise<void> {
+  const { data: photos } = await supabase.from("log_photos").select("url").eq("log_id", logId);
+  const marker = `/${PHOTO_BUCKET}/`;
+  const paths = (photos ?? [])
+    .map((photo) => photo.url as string)
+    .filter((url) => url.includes(marker))
+    .map((url) => decodeURIComponent(url.slice(url.indexOf(marker) + marker.length)));
+  if (paths.length) {
+    // Best effort: a leftover file shouldn't stop the hike from being deleted
+    const { error } = await supabase.storage.from(PHOTO_BUCKET).remove(paths);
+    if (error) console.error("Couldn't delete hike photos", error);
+  }
+
+  const { error } = await supabase.from("hike_logs").delete().eq("id", logId).eq("user_id", userId);
+  if (error) throw error;
+
+  await saveRanking(await fetchHikeLogs(userId));
+}
+
 export async function saveHikeLog({
   userId,
   trail,

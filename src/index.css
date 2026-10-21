@@ -421,6 +421,15 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .post-action.open { color: var(--forest); background: var(--pale-sage); }
 .post-action.saved { color: var(--forest); }
 .post-action.save { margin-left: auto; }
+.post-action.delete:hover, .post-action.delete.open { color: #b83a26; background: #f8e3dc; }
+.post-delete-confirm { margin: 8px 14px 0; padding: 12px 14px; border: 1.5px solid #e9b9a8; border-radius: 15px; background: #fff4ee; }
+.post-delete-confirm p { margin: 0; font-size: 13px; line-height: 1.45; color: #5a3e2b; }
+.post-delete-confirm p b { display: block; font-size: 14px; color: #3a2c1e; margin-bottom: 2px; }
+.post-delete-confirm .post-delete-error { margin-top: 8px; color: #b83a26; }
+.post-delete-buttons { display: flex; gap: 8px; margin-top: 10px; }
+.post-delete-buttons button { flex: 1; min-height: 40px; border: 0; border-radius: 12px; background: #f0e8dc; color: #5a3e2b; font-weight: 600; font-size: 14px; cursor: pointer; }
+.post-delete-buttons button.danger { background: #c2412b; color: white; }
+.post-delete-buttons button:disabled { opacity: .6; cursor: default; }
 
 .post-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 16px 16px; }
 .post-counts { display: flex; align-items: baseline; gap: 12px; font-size: 13px; }

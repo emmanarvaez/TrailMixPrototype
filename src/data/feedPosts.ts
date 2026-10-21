@@ -26,6 +26,7 @@ export type FeedPost = {
   saved: boolean;
   comments: PostComment[];
   taggedUsers?: string[];
+  logId?: string; // set on posts created from the user's own saved hike; these can be deleted
 };
 
 export const currentUser: Friend = { name: "Alex", username: "alex.hikes", color: "#e66a3c" };
