@@ -1,7 +1,9 @@
 export type Difficulty = "Easy" | "Moderate" | "Hard";
 
 export type Trail = {
+  id?: string;
   name: string;
+  area?: string;
   meta: string;
   image: string;
   distance: string;

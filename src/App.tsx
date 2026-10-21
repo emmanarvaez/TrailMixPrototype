@@ -1,11 +1,19 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import { friends, initialFeedPosts, type FeedPost } from "./data/feedPosts";
-import { trailPhotos, trails, type Trail } from "./data/trails";
+import { type Trail } from "./data/trails";
+import {
+  fetchHikeLogs,
+  fetchTrails,
+  fetchUnlockedIngredients,
+  saveHikeLog,
+  saveRanking,
+  type HikeLog,
+} from "./lib/hikes";
 
 const detailOptions = [
   { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
@@ -68,32 +76,56 @@ function getResultVariant(rank: number, total: number): MascotVariant {
   return "not-for-me";
 }
 
-// Ingredients unlocked before this hike (one per previously completed hike).
-// Index UNLOCKED_COUNT is the ingredient this hike unlocks.
-const UNLOCKED_COUNT = 7;
+// New users start with the first few ingredients; each logged hike unlocks the next one
+// (saved to user_ingredients, keyed by detailOptions[i].shape).
+const STARTER_INGREDIENTS = 3;
 
-type HikeRecord = {
-  date: string;
-  rating: "Loved it!" | "It was fine" | "Not for me";
-  difficulty: number;
-  caption: string;
-  ingredients: number[];
-};
+function unlockedIndexes(unlockedKeys: string[]): Set<number> {
+  const unlocked = new Set<number>();
+  detailOptions.forEach((option, index) => {
+    if (index < STARTER_INGREDIENTS || unlockedKeys.includes(option.shape)) unlocked.add(index);
+  });
+  return unlocked;
+}
 
-const hikeDetails: Record<string, HikeRecord> = {
-  "Holy Jim Falls":          { date: "Oct 14, 2026", rating: "Loved it!",   difficulty: 3, caption: "Worth every steep mile.",         ingredients: [0, 2] },
-  "Top of the World":        { date: "Oct 8, 2026",  rating: "Loved it!",   difficulty: 2, caption: "Views were insane.",               ingredients: [0, 1, 3] },
-  "Bommer Canyon Loop":      { date: "Oct 7, 2026",  rating: "Loved it!",   difficulty: 1, caption: "Quick morning loop.",              ingredients: [0] },
-  "Crystal Cove Moro Ridge": { date: "Sep 30, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [4, 5] },
-  "Peters Canyon Loop":      { date: "Sep 22, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [1, 2] },
-  "Quail Hill Trail":        { date: "Sep 15, 2026", rating: "It was fine", difficulty: 1, caption: "Easy and beautiful.",              ingredients: [5] },
-  "Black Star Canyon":       { date: "Sep 1, 2026",  rating: "Loved it!",   difficulty: 3, caption: "Spooky and stunning.",             ingredients: [0, 3] },
-  "Buck Gully Trail":        { date: "Aug 25, 2026", rating: "Not for me",  difficulty: 2, caption: "Too crowded.",                     ingredients: [4] },
-  "Laguna Coast Loop":       { date: "Aug 18, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [2] },
-  "Santiago Oaks":           { date: "Aug 10, 2026", rating: "Loved it!",   difficulty: 2, caption: "Great for a hot day.",             ingredients: [6] },
-  "Moro Canyon Trail":       { date: "Aug 4, 2026",  rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [0, 1] },
-  "Red Rock Canyon":         { date: "Jul 28, 2026", rating: "Loved it!",   difficulty: 3, caption: "Gorgeous rock formations.",        ingredients: [3, 5] },
-};
+function nextUnlockIndex(unlockedKeys: string[]): number | null {
+  const unlocked = unlockedIndexes(unlockedKeys);
+  const index = detailOptions.findIndex((_, i) => !unlocked.has(i));
+  return index === -1 ? null : index;
+}
+
+// Shapes for the ingredients picked on each hike, oldest pick first
+function hikeShapes(logs: HikeLog[]): string[] {
+  return logs.flatMap((log) =>
+    log.highlights.map((label) => detailOptions.find((option) => option.label === label)?.shape).filter((s): s is string => !!s),
+  );
+}
+
+// Jar fills up as more ingredients are picked (17 piece positions in the CSS)
+function buildJarMix(shapes: string[]): string[] {
+  if (shapes.length === 0) return [];
+  return Array.from({ length: Math.min(17, shapes.length * 3) }, (_, i) => shapes[i % shapes.length]);
+}
+
+function formatHikeDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function todayISO(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String(error.message);
+  return "Something went wrong.";
+}
+
+type RankItem = { id: string; name: string };
+
+// Placeholder id for the hike being logged, before it has a database row
+const NEW_HIKE = "new";
 
 const ingredientCategories: { label: string; indices: number[] }[] = [
   { label: "Sweet",        indices: [0] },
@@ -781,16 +813,20 @@ function Button({
 }
 
 function TrailSelect({
+  trails,
+  loadError,
   selected,
   setSelected,
   onNext,
 }: {
+  trails: Trail[] | null;
+  loadError: string;
   selected: Trail | null;
   setSelected: (trail: Trail) => void;
   onNext: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = trails.filter((trail) => trail.name.toLowerCase().includes(query.toLowerCase()));
+  const filtered = (trails ?? []).filter((trail) => trail.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <Shell step={1}>
@@ -799,7 +835,7 @@ function TrailSelect({
           <span className="eyebrow">Pick your path</span>
           <h1>Which trail did you hike</h1>
         </div>
-        <Mascot variant="default" />
+        {loadError ? <Mascot key="oops" variant="oops" /> : <Mascot variant="default" />}
         <label className="search-field">
           <span aria-hidden="true">⌕</span>
           <input onChange={(event) => setQuery(event.target.value)} placeholder="Search trails" value={query} />
@@ -809,10 +845,15 @@ function TrailSelect({
           <span>Orange County</span>
         </div>
         <div className="trail-list">
+          {loadError && <p className="unlock-note">Couldn't load trails: {loadError}</p>}
+          {!loadError && !trails && <p className="unlock-note">Loading trails…</p>}
+          {trails && filtered.length === 0 && (
+            <p className="unlock-note">{trails.length === 0 ? "No trails yet." : "No trails match your search."}</p>
+          )}
           {filtered.map((trail) => (
             <button
-              className={`trail-card ${selected?.name === trail.name ? "selected" : ""}`}
-              key={trail.name}
+              className={`trail-card ${selected?.id === trail.id ? "selected" : ""}`}
+              key={trail.id}
               onClick={() => {
                 setSelected(trail);
                 window.setTimeout(onNext, 140);
@@ -862,7 +903,7 @@ function RateTrail({
       <section className="screen-content rate-screen">
         <div className="hero-photo">
           <img alt={`View from ${trail.name}`} src={trail.image} />
-          <span className="photo-sticker">Yesterday · Laguna Beach</span>
+          <span className="photo-sticker">Today · {trail.area ?? "Orange County"}</span>
           <svg className="photo-sun" viewBox="0 0 100 100"><circle cx="50" cy="50" r="31" /></svg>
         </div>
         <div className="screen-title compact">
@@ -904,6 +945,7 @@ function RateTrail({
 }
 
 function RankTrail({
+  trailName,
   ranking,
   setRanking,
   lowerRanking,
@@ -911,21 +953,25 @@ function RankTrail({
   onNext,
   onBack,
 }: {
-  ranking: string[];
-  setRanking: (ranking: string[]) => void;
-  lowerRanking: string[];
-  setLowerRanking: (ranking: string[]) => void;
+  trailName: string;
+  ranking: RankItem[];
+  setRanking: (ranking: RankItem[]) => void;
+  lowerRanking: RankItem[];
+  setLowerRanking: (ranking: RankItem[]) => void;
   onNext: () => void;
   onBack: () => void;
 }) {
-  const [showLowerRanks, setShowLowerRanks] = useState(!ranking.includes("Bommer Canyon Loop"));
+  const [showLowerRanks, setShowLowerRanks] = useState(!ranking.some((item) => item.id === NEW_HIKE));
+  const newItem = [...ranking, ...lowerRanking].find((item) => item.id === NEW_HIKE)!;
+  // Only offer the lower-ranks view once there are more hikes than mountain spots
+  const hasLowerRanks = ranking.length + lowerRanking.length > 4;
   const draggingIndex = useRef<number | null>(null);
   const dragY = useRef(0);
   // Change 2: track whether the user has dragged at least once and the live drag position
   const [hasDragged, setHasDragged] = useState(false);
   const [dragPos, setDragPos] = useState<number | null>(null);
 
-  const move = (items: string[], updateItems: (items: string[]) => void, from: number, to: number) => {
+  const move = (items: RankItem[], updateItems: (items: RankItem[]) => void, from: number, to: number) => {
     if (from === to || to < 0 || to >= items.length) return;
     const next = [...items];
     const [item] = next.splice(from, 1);
@@ -962,10 +1008,10 @@ function RankTrail({
   const getDragContext = (): string | null => {
     if (dragPos === null) return null;
     const items = showLowerRanks ? lowerRanking : ranking.slice(0, 4);
-    // items[dragPos - 1] has a higher rank → Bommer is below them
-    // items[dragPos + 1] has a lower rank → Bommer is above them
-    const higherNeighbor = items[dragPos - 1];
-    const lowerNeighbor = items[dragPos + 1];
+    // items[dragPos - 1] has a higher rank → the new hike is below them
+    // items[dragPos + 1] has a lower rank → the new hike is above them
+    const higherNeighbor = items[dragPos - 1]?.name;
+    const lowerNeighbor = items[dragPos + 1]?.name;
     const parts: string[] = [];
     if (lowerNeighbor) parts.push(`Above ${lowerNeighbor}`);
     if (higherNeighbor) parts.push(`below ${higherNeighbor}`);
@@ -974,14 +1020,14 @@ function RankTrail({
   };
 
   const openLowerRanks = () => {
-    setRanking(ranking.filter((name) => name !== "Bommer Canyon Loop"));
-    setLowerRanking(["Bommer Canyon Loop", ...lowerRanking.filter((name) => name !== "Bommer Canyon Loop")]);
+    setRanking(ranking.filter((item) => item.id !== NEW_HIKE));
+    setLowerRanking([newItem, ...lowerRanking.filter((item) => item.id !== NEW_HIKE)]);
     setShowLowerRanks(true);
   };
 
   const returnToMountain = () => {
-    setLowerRanking(lowerRanking.filter((name) => name !== "Bommer Canyon Loop"));
-    setRanking([...ranking.filter((name) => name !== "Bommer Canyon Loop"), "Bommer Canyon Loop"]);
+    setLowerRanking(lowerRanking.filter((item) => item.id !== NEW_HIKE));
+    setRanking([...ranking.filter((item) => item.id !== NEW_HIKE), newItem]);
     setShowLowerRanks(false);
   };
 
@@ -993,7 +1039,7 @@ function RankTrail({
         <div className="screen-title">
           <span className="eyebrow">Your personal peaks</span>
           <h1>{showLowerRanks ? "Rank it with the rest" : "Place it on your mountain"}</h1>
-          <p>{showLowerRanks ? "Drag Bommer Canyon anywhere from #4 down." : "Drag Bommer Canyon up or down to rank it."}</p>
+          <p>{showLowerRanks ? `Drag ${trailName} anywhere from #4 down.` : `Drag ${trailName} up or down to rank it.`}</p>
         </div>
         {!showLowerRanks ? (
           <>
@@ -1008,12 +1054,12 @@ function RankTrail({
                 <path className="ridge" d="m22 382 87-167 65 81 61-113 145 201" />
               </svg>
               <div className="rank-list">
-                {ranking.slice(0, 4).map((name, index) => {
-                  const isNew = name === "Bommer Canyon Loop";
+                {ranking.slice(0, 4).map((item, index) => {
+                  const isNew = item.id === NEW_HIKE;
                   return (
                     <div
                       className={`rank-item rank-${index + 1} ${isNew ? "new-trail" : ""} ${isNew && !hasDragged ? "show-hint" : ""}`}
-                      key={name}
+                      key={item.id}
                       onPointerDown={(event) => {
                         if (!isNew) return;
                         event.currentTarget.setPointerCapture(event.pointerId);
@@ -1023,7 +1069,7 @@ function RankTrail({
                       onPointerUp={stopDrag}
                     >
                       <span className="rank-number">#{index + 1}</span>
-                      <span className="rank-name">{name}</span>
+                      <span className="rank-name">{item.name}</span>
                       {isNew && <span className="drag-handle">⠿</span>}
                     </div>
                   );
@@ -1036,21 +1082,23 @@ function RankTrail({
               <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
             </div>
             {!hasDragged && <Mascot variant="thinking" />}
-            <button className="lower-ranks-button" onClick={openLowerRanks}>
-              <span><b>Didn't make the top four?</b><small>Rank it with the rest of your hikes</small></span>
-              <img alt="" src="/assets/cashew-04-not-for-me.svg" style={{ width: 80, height: "auto" }} />
-            </button>
+            {hasLowerRanks && (
+              <button className="lower-ranks-button" onClick={openLowerRanks}>
+                <span><b>Didn't make the top four?</b><small>Rank it with the rest of your hikes</small></span>
+                <img alt="" src="/assets/cashew-04-not-for-me.svg" style={{ width: 80, height: "auto" }} />
+              </button>
+            )}
           </>
         ) : (
           <div className="lower-ranks-view">
             <button className="return-mountain" onClick={returnToMountain}>← Put it back on the mountain</button>
             <div className="lower-ranks-list">
-              {lowerRanking.map((name, index) => {
-                const isNew = name === "Bommer Canyon Loop";
+              {lowerRanking.map((item, index) => {
+                const isNew = item.id === NEW_HIKE;
                 return (
                   <div
                     className={`lower-rank-item ${isNew ? "new-trail" : ""} ${isNew && !hasDragged ? "show-hint" : ""}`}
-                    key={name}
+                    key={item.id}
                     onPointerDown={(event) => {
                       if (!isNew) return;
                       event.currentTarget.setPointerCapture(event.pointerId);
@@ -1059,8 +1107,8 @@ function RankTrail({
                     onPointerMove={(event) => handleMove(event.clientY)}
                     onPointerUp={stopDrag}
                   >
-                    <span className="rank-number">#{index + 4}</span>
-                    <span className="rank-name">{name}</span>
+                    <span className="rank-number">#{index + ranking.length + 1}</span>
+                    <span className="rank-name">{item.name}</span>
                     {isNew && <span className="drag-handle">⠿</span>}
                   </div>
                 );
@@ -1081,25 +1129,39 @@ function RankTrail({
 }
 
 function AddDetails({
+  trailName,
+  unlocked,
   selectedDetails,
   setSelectedDetails,
+  photos,
+  setPhotos,
   caption,
   setCaption,
   taggedFriends,
   setTaggedFriends,
+  saving,
+  saveError,
   onSave,
   onBack,
 }: {
+  trailName: string;
+  unlocked: Set<number>;
   selectedDetails: number[];
   setSelectedDetails: (indexes: number[]) => void;
+  photos: File[];
+  setPhotos: React.Dispatch<React.SetStateAction<File[]>>;
   caption: string;
   setCaption: (caption: string) => void;
   taggedFriends: string[];
   setTaggedFriends: React.Dispatch<React.SetStateAction<string[]>>;
+  saving: boolean;
+  saveError: string;
   onSave: () => void;
   onBack: () => void;
 }) {
-  const [added, setAdded] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  const photoPreviews = useMemo(() => photos.map((file) => URL.createObjectURL(file)), [photos]);
+  useEffect(() => () => photoPreviews.forEach((url) => URL.revokeObjectURL(url)), [photoPreviews]);
   const [friend, setFriend] = useState("");
   const friendSuggestions = friend.trim()
     ? availableFriends.filter(
@@ -1118,7 +1180,7 @@ function AddDetails({
     <Shell onBack={onBack} step={4}>
       <section className="screen-content details-screen">
         <div className="screen-title compact">
-          <span className="eyebrow">Bommer Canyon Loop</span>
+          <span className="eyebrow">{trailName}</span>
           <h1>Add details</h1>
         </div>
         <div className="field-group">
@@ -1130,7 +1192,7 @@ function AddDetails({
           {/* Change 4 + 5: bigger vertical chips, locked state */}
           <div className="detail-grid">
             {detailOptions.map((option, index) => {
-              const isLocked = index >= UNLOCKED_COUNT;
+              const isLocked = !unlocked.has(index);
               const isSelected = selectedDetails.includes(index);
               return (
                 <button
@@ -1168,11 +1230,29 @@ function AddDetails({
           />
         )}
         <div className="field-group">
-          <div className="section-heading"><h2>Photos</h2><span>2 added</span></div>
+          <div className="section-heading"><h2>Photos</h2><span>{photos.length} added</span></div>
           <div className="photo-row">
-            <button className="add-photo" onClick={() => setAdded(true)}><span>+</span><small>{added ? "Added" : "Add"}</small></button>
-            <img alt="Bommer Canyon view" src={trailPhotos[0]} />
-            <img alt="Trail at sunset" src={trailPhotos[1]} />
+            <button className="add-photo" onClick={() => photoInput.current?.click()} type="button"><span>+</span><small>Add</small></button>
+            <input
+              accept="image/*"
+              hidden
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                setPhotos((current) => [...current, ...files]);
+                event.target.value = "";
+              }}
+              ref={photoInput}
+              type="file"
+            />
+            {photoPreviews.map((src, index) => (
+              <img
+                alt={`Photo ${index + 1} (tap to remove)`}
+                key={src}
+                onClick={() => setPhotos((current) => current.filter((_, i) => i !== index))}
+                src={src}
+              />
+            ))}
           </div>
         </div>
         <label className="text-field">
@@ -1229,9 +1309,16 @@ function AddDetails({
             </div>
           )}
         </div>
+        {saving && <Mascot variant="stuffed-cheeks" />}
+        {!saving && saveError && (
+          <>
+            <Mascot key={saveError} variant="oops" />
+            <p className="auth-error" role="alert">{saveError}</p>
+          </>
+        )}
       </section>
       <div className="sticky-action">
-        <Button disabled={selectedDetails.length === 0} onClick={onSave}>Save</Button>
+        <Button disabled={selectedDetails.length === 0 || saving} onClick={onSave}>{saving ? "Saving…" : "Save"}</Button>
       </div>
     </Shell>
   );
@@ -1265,26 +1352,28 @@ function Result({
   trail,
   ranking,
   lowerRanking,
+  previousShapes,
+  unlockIndex,
+  jarOwner,
   onRestart,
   onBack,
 }: {
   rank: number;
   details: number[];
   trail: Trail;
-  ranking: string[];
-  lowerRanking: string[];
+  ranking: RankItem[];
+  lowerRanking: RankItem[];
+  previousShapes: string[];
+  unlockIndex: number | null;
+  jarOwner: string;
   onRestart: () => void;
-  onBack: () => void;
+  onBack?: () => void;
 }) {
   const choices = details.map((detail) => detailOptions[detail]);
-  const mix = useMemo(() => [
-    "almonds", "cranberries", "pretzel", "chocolate", "cashew", "dried-fruit",
-    "nuts", "almonds", "cranberries", "cashew", "pretzel", "chocolate",
-    "dried-fruit", "nuts", "almonds", "cashew", "pretzel",
-  ], []);
+  const mix = useMemo(() => buildJarMix(previousShapes), [previousShapes]);
 
-  // Change 7: newly unlocked ingredient (UNLOCKED_COUNT is the index now unlocked)
-  const newlyUnlocked = detailOptions[UNLOCKED_COUNT];
+  // Change 7: newly unlocked ingredient (none once everything is unlocked)
+  const newlyUnlocked = unlockIndex !== null ? detailOptions[unlockIndex] : null;
 
   // Stats
   const totalHikes = ranking.length + lowerRanking.length;
@@ -1322,12 +1411,12 @@ function Result({
                 <Ingredient className={`new-piece new-piece-${index % 3}`} key={choice.ingredient} type={choice.shape} />
               ))}
             </div>
-            <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>Alex's jar</small></div>
+            <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>{jarOwner}'s jar</small></div>
           </div>
           <div className="ground-shadow" />
         </div>
         <div className="rank-result">
-          <span>Bommer Canyon Loop is</span>
+          <span>{trail.name} is</span>
           <b>#{rank}</b>
           <small>in your personal rankings</small>
         </div>
@@ -1339,14 +1428,16 @@ function Result({
         />
 
         {/* Change 7: newly unlocked ingredient */}
-        <div className="new-unlock-row">
-          <img alt={newlyUnlocked.ingredient} className="new-unlock-img" src={newlyUnlocked.icon} />
-          <div className="new-unlock-copy">
-            <small>New ingredient unlocked</small>
-            <b>{newlyUnlocked.ingredient}</b>
-            <span>for {newlyUnlocked.label.toLowerCase()} on the trail</span>
+        {newlyUnlocked && (
+          <div className="new-unlock-row">
+            <img alt={newlyUnlocked.ingredient} className="new-unlock-img" src={newlyUnlocked.icon} />
+            <div className="new-unlock-copy">
+              <small>New ingredient unlocked</small>
+              <b>{newlyUnlocked.ingredient}</b>
+              <span>for {newlyUnlocked.label.toLowerCase()} on the trail</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Change 7: quick stats */}
         <div className="result-stats-row">
@@ -1367,12 +1458,12 @@ function Result({
         {/* Change 7: full ranked hike list */}
         <div className="full-rankings-section" ref={rankingsRef}>
           <h3>Your rankings</h3>
-          {allRanked.map((name, index) => {
-            const isNew = name === "Bommer Canyon Loop";
+          {allRanked.map((item, index) => {
+            const isNew = item.id === NEW_HIKE;
             return (
-              <div className={`full-rank-item ${isNew ? "highlight" : ""}`} key={name}>
+              <div className={`full-rank-item ${isNew ? "highlight" : ""}`} key={item.id}>
                 <span className="fr-num">#{index + 1}</span>
-                <span className="fr-name">{name}</span>
+                <span className="fr-name">{item.name}</span>
                 {isNew && <span className="new-badge">New</span>}
               </div>
             );
@@ -1395,11 +1486,13 @@ function Result({
 function AccomplishmentsMountain({
   ranking,
   setRanking,
+  onDrop,
   onSelectHike,
 }: {
-  ranking: string[];
-  setRanking: (r: string[]) => void;
-  onSelectHike: (name: string) => void;
+  ranking: HikeLog[];
+  setRanking: (r: HikeLog[]) => void;
+  onDrop: () => void;
+  onSelectHike: (id: string) => void;
 }) {
   const draggingIndex = useRef<number | null>(null);
   const dragY = useRef(0);
@@ -1441,78 +1534,90 @@ function AccomplishmentsMountain({
           <path className="ridge" d="m22 382 87-167 65 81 61-113 145 201" />
         </svg>
         <div className="rank-list">
-          {ranking.slice(0, 4).map((name, index) => (
-            <div className={`rank-item rank-${index + 1}`} key={name}>
+          {ranking.slice(0, 4).map((hike, index) => (
+            <div className={`rank-item rank-${index + 1}`} key={hike.id}>
               <span className="rank-number">#{index + 1}</span>
-              <span className="rank-name">{name}</span>
+              <span className="rank-name">{hike.trailName}</span>
             </div>
           ))}
         </div>
         <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
       </div>
       <div className="accom-rank-list-section">
-        {ranking.map((name, index) => {
-          const hike = hikeDetails[name];
-          return (
-            <div
-              className={`accom-rank-item ${dragPos === index ? "dragging" : ""}`}
-              key={name}
-              onPointerDown={(e) => {
-                e.currentTarget.setPointerCapture(e.pointerId);
-                draggingIndex.current = index;
-                dragY.current = e.clientY;
-                pointerStartY.current = e.clientY;
-                setDragPos(index);
-              }}
-              onPointerMove={(e) => handleMove(e.clientY)}
-              onPointerUp={(e) => {
-                const isTap = Math.abs(e.clientY - pointerStartY.current) < 10;
-                draggingIndex.current = null;
-                setDragPos(null);
-                if (isTap) onSelectHike(name);
-              }}
-            >
-              <span className="ar-num">#{index + 1}</span>
-              <span className="ar-name">{name}</span>
-              {hike && (
-                <span className="ar-rating" style={{ color: ratingColor(hike.rating) }}>
-                  {ratingIcon(hike.rating)}
-                </span>
-              )}
-              <span className="ar-drag">⠿</span>
-            </div>
-          );
-        })}
+        {ranking.map((hike, index) => (
+          <div
+            className={`accom-rank-item ${dragPos === index ? "dragging" : ""}`}
+            key={hike.id}
+            onPointerDown={(e) => {
+              e.currentTarget.setPointerCapture(e.pointerId);
+              draggingIndex.current = index;
+              dragY.current = e.clientY;
+              pointerStartY.current = e.clientY;
+              setDragPos(index);
+            }}
+            onPointerMove={(e) => handleMove(e.clientY)}
+            onPointerUp={(e) => {
+              const isTap = Math.abs(e.clientY - pointerStartY.current) < 10;
+              draggingIndex.current = null;
+              setDragPos(null);
+              if (isTap) onSelectHike(hike.id);
+              else onDrop();
+            }}
+          >
+            <span className="ar-num">#{index + 1}</span>
+            <span className="ar-name">{hike.trailName}</span>
+            {hike.reaction && (
+              <span className="ar-rating" style={{ color: ratingColor(hike.reaction) }}>
+                {ratingIcon(hike.reaction)}
+              </span>
+            )}
+            <span className="ar-drag">⠿</span>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
+function Accomplishments({ onLogHike, userId }: { onLogHike: () => void; userId: string }) {
   const [subTab, setSubTab] = useState<"mountain" | "trailmix">("mountain");
-  const [accomRanking, setAccomRanking] = useState([
-    "Holy Jim Falls", "Bommer Canyon Loop", "Top of the World", "Crystal Cove Moro Ridge",
-    "Peters Canyon Loop", "Quail Hill Trail", "Black Star Canyon", "Buck Gully Trail",
-    "Laguna Coast Loop", "Santiago Oaks", "Moro Canyon Trail", "Red Rock Canyon",
-  ]);
+  const [accomRanking, setAccomRanking] = useState<HikeLog[] | null>(null);
+  const [unlockedKeys, setUnlockedKeys] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState("");
   const [selectedHike, setSelectedHike] = useState<string | null>(null);
   const [selectedIngredient, setSelectedIngredient] = useState<number | null>(null);
 
-  const totalHikes = accomRanking.length;
-  const topHike = accomRanking[0];
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([fetchHikeLogs(userId), fetchUnlockedIngredients(userId)])
+      .then(([logs, keys]) => {
+        if (cancelled) return;
+        setAccomRanking(logs);
+        setUnlockedKeys(keys);
+      })
+      .catch((error) => { if (!cancelled) setLoadError(errorMessage(error)); });
+    return () => { cancelled = true; };
+  }, [userId]);
+
+  const logs = accomRanking ?? [];
+  const unlocked = unlockedIndexes(unlockedKeys);
+  const totalHikes = logs.length;
+  const totalMiles = logs.reduce((sum, log) => sum + log.miles, 0);
+  const topHike = logs[0]?.trailName ?? "—";
+
+  const persistRanking = () => {
+    if (!accomRanking) return;
+    saveRanking(accomRanking)
+      .then(setAccomRanking)
+      .catch((error) => setLoadError(errorMessage(error)));
+  };
 
   const hikesForIngredient = (idx: number) =>
-    Object.entries(hikeDetails)
-      .filter(([, data]) => data.ingredients.includes(idx))
-      .map(([name]) => name);
+    logs.filter((log) => log.highlights.includes(detailOptions[idx].label));
 
-  const jarMix = useMemo(() => {
-    const types = detailOptions.slice(0, UNLOCKED_COUNT).map((d) => d.shape);
-    return Array.from({ length: 17 }, (_, i) => types[i % types.length]);
-  }, []);
+  const jarMix = useMemo(() => buildJarMix(hikeShapes(accomRanking ?? [])), [accomRanking]);
 
-  const selectedHikeData = selectedHike ? hikeDetails[selectedHike] : null;
-  const diffLabel = (d: number) => ["Easy", "Moderate", "Tough"][d - 1];
+  const selectedHikeData = logs.find((log) => log.id === selectedHike) ?? null;
   const ratingColor = (r: string) =>
     r === "Loved it!" ? "#e25e3f" : r === "Not for me" ? "#6e8370" : "#d5a23e";
   const ratingIcon = (r: string) =>
@@ -1528,11 +1633,11 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
             <small>hikes</small>
           </div>
           <div className="accom-stat">
-            <b>47.2 mi</b>
+            <b>{totalMiles.toFixed(1)} mi</b>
             <small>miles</small>
           </div>
           <div className="accom-stat">
-            <b>{UNLOCKED_COUNT} of {detailOptions.length}</b>
+            <b>{unlocked.size} of {detailOptions.length}</b>
             <small>ingredients</small>
           </div>
           <div className="accom-stat" style={{ flex: 2, minWidth: 0 }}>
@@ -1558,7 +1663,14 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
         </div>
       </div>
 
-      {subTab === "mountain" && (
+      {loadError && (
+        <div className="accom-empty">
+          <Mascot variant="oops" />
+          <p className="auth-error" role="alert">{loadError}</p>
+        </div>
+      )}
+
+      {!loadError && accomRanking && subTab === "mountain" && (
         totalHikes === 0 ? (
           <div className="accom-empty">
             <Mascot variant="sleepy" />
@@ -1568,6 +1680,7 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
           </div>
         ) : (
           <AccomplishmentsMountain
+            onDrop={persistRanking}
             onSelectHike={setSelectedHike}
             ranking={accomRanking}
             setRanking={setAccomRanking}
@@ -1575,10 +1688,10 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
         )
       )}
 
-      {subTab === "trailmix" && (
+      {!loadError && accomRanking && subTab === "trailmix" && (
         <div>
           <div style={{ display: "flex", justifyContent: "center", padding: "16px 16px 0" }}>
-            <Mascot variant="celebrate" />
+            <Mascot key={totalHikes === 0 ? "sleepy" : "celebrate"} variant={totalHikes === 0 ? "sleepy" : "celebrate"} />
           </div>
           <div className="accom-jar-stage">
             <div className="jar-lid"><span /><span /><span /></div>
@@ -1596,7 +1709,7 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
           <div className="accom-ingredient-categories">
             <div className="accom-ingredient-grid">
               {detailOptions.map((opt, idx) => {
-                const isUnlocked = idx < UNLOCKED_COUNT;
+                const isUnlocked = unlocked.has(idx);
                 const hikeCount = hikesForIngredient(idx).length;
                 return (
                   <div
@@ -1621,28 +1734,36 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
         </div>
       )}
 
-      {selectedHike && selectedHikeData && (
+      {selectedHikeData && (
         <div className="hike-detail-overlay" onClick={() => setSelectedHike(null)}>
           <div className="hike-detail-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle" />
-            <h2>{selectedHike}</h2>
+            <h2>{selectedHikeData.trailName}</h2>
             <div className="sheet-meta">
-              #{accomRanking.indexOf(selectedHike) + 1} in your rankings · {selectedHikeData.date}
+              #{logs.indexOf(selectedHikeData) + 1} in your rankings · {formatHikeDate(selectedHikeData.date)}
             </div>
-            <div className="sheet-detail-row">
-              <span className="sdr-label">Reaction</span>
-              <span style={{ color: ratingColor(selectedHikeData.rating), fontWeight: 600 }}>
-                {ratingIcon(selectedHikeData.rating)} {selectedHikeData.rating}
-              </span>
-            </div>
-            <div className="sheet-detail-row">
-              <span className="sdr-label">Difficulty</span>
-              <span>{diffLabel(selectedHikeData.difficulty)}</span>
-            </div>
-            {selectedHikeData.ingredients.length > 0 && (
+            {selectedHikeData.reaction && (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Reaction</span>
+                <span style={{ color: ratingColor(selectedHikeData.reaction), fontWeight: 600 }}>
+                  {ratingIcon(selectedHikeData.reaction)} {selectedHikeData.reaction}
+                </span>
+              </div>
+            )}
+            {selectedHikeData.difficulty && (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Difficulty</span>
+                <span>{selectedHikeData.difficulty}</span>
+              </div>
+            )}
+            {selectedHikeData.highlights.length > 0 && (
               <div className="sheet-detail-row">
                 <span className="sdr-label">Trail mix</span>
-                <span>{selectedHikeData.ingredients.map((i) => detailOptions[i].ingredient).join(", ")}</span>
+                <span>
+                  {selectedHikeData.highlights
+                    .map((label) => detailOptions.find((option) => option.label === label)?.ingredient ?? label)
+                    .join(", ")}
+                </span>
               </div>
             )}
             {selectedHikeData.caption ? (
@@ -1651,6 +1772,16 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
                 <span style={{ fontStyle: "italic" }}>"{selectedHikeData.caption}"</span>
               </div>
             ) : null}
+            {selectedHikeData.photos.length > 0 && (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Photos</span>
+                <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {selectedHikeData.photos.map((url) => (
+                    <img alt="" key={url} src={url} style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 10 }} />
+                  ))}
+                </span>
+              </div>
+            )}
             <button className="sheet-close-btn" onClick={() => setSelectedHike(null)} type="button">
               Done
             </button>
@@ -1668,9 +1799,12 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
               Unlocked for {detailOptions[selectedIngredient].label.toLowerCase()} on the trail
             </div>
             <div className="ids-section-label">Hikes that added this</div>
-            {hikesForIngredient(selectedIngredient).map((name) => (
-              <div className="ids-hike-row" key={name}>{name}</div>
+            {hikesForIngredient(selectedIngredient).map((log) => (
+              <div className="ids-hike-row" key={log.id}>{log.trailName}</div>
             ))}
+            {hikesForIngredient(selectedIngredient).length === 0 && (
+              <div className="ids-hike-row">None yet. Pick it on your next hike!</div>
+            )}
             <button className="sheet-close-btn" onClick={() => setSelectedIngredient(null)} type="button">
               Done
             </button>
@@ -1716,7 +1850,7 @@ export default function App() {
       )}
       {tab === "accomplishments" && (
         <Shell>
-          <Accomplishments onLogHike={() => switchTab("log")} />
+          <Accomplishments onLogHike={() => switchTab("log")} userId={user.id} />
         </Shell>
       )}
       {tab === "profile" && showSettings && (
@@ -1749,6 +1883,7 @@ export default function App() {
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
       <div hidden={tab !== "log"}>
         <LogHikeFlow
+          active={tab === "log"}
           onLogHike={(post) => {
             setPosts((current) => [post, ...current]);
             switchTab("profile");
@@ -1761,47 +1896,120 @@ export default function App() {
   );
 }
 
-function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void; user: AuthUser }) {
+function LogHikeFlow({ active, onLogHike, user }: { active: boolean; onLogHike: (post: FeedPost) => void; user: AuthUser }) {
   const [step, setStep] = useState(1);
+  const [trails, setTrails] = useState<Trail[] | null>(null);
+  const [trailsError, setTrailsError] = useState("");
+  const [pastLogs, setPastLogs] = useState<HikeLog[]>([]);
+  const [unlockedKeys, setUnlockedKeys] = useState<string[]>([]);
+  const historyLoad = useRef<Promise<HikeLog[]>>(Promise.resolve([]));
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const [rating, setRating] = useState("");
   const [difficulty, setDifficulty] = useState(2);
-  const [ranking, setRanking] = useState([
-    "Holy Jim Falls",
-    "Bommer Canyon Loop",
-    "Top of the World",
-    "Crystal Cove Moro Ridge",
-  ]);
-  const [lowerRanking, setLowerRanking] = useState([
-    "Peters Canyon Loop",
-    "Quail Hill Trail",
-    "Black Star Canyon",
-    "Buck Gully Trail",
-    "Laguna Coast Loop",
-    "Santiago Oaks",
-    "Moro Canyon Trail",
-    "Red Rock Canyon",
-  ]);
+  const [ranking, setRanking] = useState<RankItem[]>([]);
+  const [lowerRanking, setLowerRanking] = useState<RankItem[]>([]);
   const [selectedDetails, setSelectedDetails] = useState<number[]>([0]);
+  const [photos, setPhotos] = useState<File[]>([]);
   const [caption, setCaption] = useState("");
   const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState<{ photoUrls: string[]; unlockIndex: number | null; previousShapes: string[] } | null>(null);
+
+  useEffect(() => {
+    fetchTrails().then(setTrails).catch((error) => setTrailsError(errorMessage(error)));
+  }, []);
+
+  // Refresh past hikes whenever a new log starts, so rankings changed on Accomplishments are picked up
+  useEffect(() => {
+    if (!active || step !== 1) return;
+    historyLoad.current = Promise.all([fetchHikeLogs(user.id), fetchUnlockedIngredients(user.id)])
+      .then(([logs, keys]) => {
+        setPastLogs(logs);
+        setUnlockedKeys(keys);
+        return logs;
+      })
+      .catch((error) => {
+        console.error("Couldn't load past hikes", error);
+        return [];
+      });
+  }, [active, step, user.id]);
 
   const go = (next: number) => {
     setStep(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (step === 1) return <TrailSelect onNext={() => go(2)} selected={selectedTrail} setSelected={setSelectedTrail} />;
-  if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={() => go(3)} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={selectedTrail ?? trails[0]} />;
-  if (step === 3) return <RankTrail lowerRanking={lowerRanking} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} />;
-  if (step === 4) return <AddDetails caption={caption} onBack={() => go(3)} onSave={() => go(5)} selectedDetails={selectedDetails} setCaption={setCaption} setSelectedDetails={setSelectedDetails} setTaggedFriends={setTaggedFriends} taggedFriends={taggedFriends} />;
+  // Places the new hike at the bottom of the mountain (or #4); the user drags it from there
+  const startRanking = async () => {
+    const logs = await historyLoad.current;
+    const existing = logs.map((log) => ({ id: log.id, name: log.trailName }));
+    setRanking([...existing.slice(0, 3), { id: NEW_HIKE, name: selectedTrail!.name }]);
+    setLowerRanking(existing.slice(3));
+    go(3);
+  };
+
+  const allRanked = [...ranking, ...lowerRanking];
+  const rank = allRanked.findIndex((item) => item.id === NEW_HIKE) + 1;
+
+  const save = async () => {
+    if (!selectedTrail) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const unlockIndex = nextUnlockIndex(unlockedKeys);
+      const { photoUrls } = await saveHikeLog({
+        userId: user.id,
+        trail: selectedTrail,
+        date: todayISO(),
+        reaction: rating,
+        difficulty: ["Easy", "Moderate", "Tough"][difficulty - 1],
+        highlights: selectedDetails.map((index) => detailOptions[index].label),
+        caption,
+        rank,
+        reranked: allRanked
+          .filter((item) => item.id !== NEW_HIKE)
+          .map((item) => pastLogs.find((log) => log.id === item.id)!),
+        photos,
+        unlockedIngredient: unlockIndex !== null ? detailOptions[unlockIndex].shape : null,
+      });
+      setSaved({ photoUrls, unlockIndex, previousShapes: hikeShapes(pastLogs) });
+      go(5);
+    } catch (error) {
+      setSaveError(`Couldn't save your hike: ${errorMessage(error)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (step === 1) return <TrailSelect loadError={trailsError} onNext={() => { if (selectedTrail) go(2); }} selected={selectedTrail} setSelected={setSelectedTrail} trails={trails} />;
+  if (!selectedTrail) return null;
+  if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={startRanking} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={selectedTrail} />;
+  if (step === 3) return <RankTrail lowerRanking={lowerRanking} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} trailName={selectedTrail.name} />;
+  if (step === 4 || !saved) return (
+    <AddDetails
+      caption={caption}
+      onBack={() => go(3)}
+      onSave={save}
+      photos={photos}
+      saveError={saveError}
+      saving={saving}
+      selectedDetails={selectedDetails}
+      setCaption={setCaption}
+      setPhotos={setPhotos}
+      setSelectedDetails={setSelectedDetails}
+      setTaggedFriends={setTaggedFriends}
+      taggedFriends={taggedFriends}
+      trailName={selectedTrail.name}
+      unlocked={unlockedIndexes(unlockedKeys)}
+    />
+  );
   return (
     <Result
       details={selectedDetails}
+      jarOwner={user.name.split(" ")[0]}
       lowerRanking={lowerRanking}
-      onBack={() => go(4)}
       onRestart={() => {
-        const completedTrail = selectedTrail ?? trails[0];
         onLogHike({
           id: `post-${Date.now()}`,
           friend: {
@@ -1809,10 +2017,10 @@ function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void;
             username: user.email.split("@")[0].toLowerCase(),
             color: "#e66a3c",
           },
-          trail: completedTrail,
-          image: completedTrail.image,
-          caption: caption.trim() || `A day out on ${completedTrail.name}.`,
-          date: new Date().toISOString().slice(0, 10),
+          trail: selectedTrail,
+          image: saved.photoUrls[0] ?? selectedTrail.image,
+          caption: caption.trim() || `A day out on ${selectedTrail.name}.`,
+          date: todayISO(),
           likes: 0,
           liked: false,
           saved: false,
@@ -1822,18 +2030,19 @@ function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void;
         setRating("");
         setDifficulty(2);
         setCaption("");
+        setPhotos([]);
         setTaggedFriends([]);
         setSelectedDetails([0]);
         setSelectedTrail(null);
+        setSaved(null);
+        setSaveError("");
         go(1);
       }}
-      rank={
-        ranking.includes("Bommer Canyon Loop")
-          ? ranking.indexOf("Bommer Canyon Loop") + 1
-          : lowerRanking.indexOf("Bommer Canyon Loop") + ranking.length + 1
-      }
+      previousShapes={saved.previousShapes}
+      rank={rank}
       ranking={ranking}
-      trail={selectedTrail ?? trails[0]}
+      trail={selectedTrail}
+      unlockIndex={saved.unlockIndex}
     />
   );
 }
