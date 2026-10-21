@@ -72,6 +72,36 @@ function getResultVariant(rank: number, total: number): MascotVariant {
 // Index UNLOCKED_COUNT is the ingredient this hike unlocks.
 const UNLOCKED_COUNT = 7;
 
+type HikeRecord = {
+  date: string;
+  rating: "Loved it!" | "It was fine" | "Not for me";
+  difficulty: number;
+  caption: string;
+  ingredients: number[];
+};
+
+const hikeDetails: Record<string, HikeRecord> = {
+  "Holy Jim Falls":          { date: "Oct 14, 2026", rating: "Loved it!",   difficulty: 3, caption: "Worth every steep mile.",         ingredients: [0, 2] },
+  "Top of the World":        { date: "Oct 8, 2026",  rating: "Loved it!",   difficulty: 2, caption: "Views were insane.",               ingredients: [0, 1, 3] },
+  "Bommer Canyon Loop":      { date: "Oct 7, 2026",  rating: "Loved it!",   difficulty: 1, caption: "Quick morning loop.",              ingredients: [0] },
+  "Crystal Cove Moro Ridge": { date: "Sep 30, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [4, 5] },
+  "Peters Canyon Loop":      { date: "Sep 22, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [1, 2] },
+  "Quail Hill Trail":        { date: "Sep 15, 2026", rating: "It was fine", difficulty: 1, caption: "Easy and beautiful.",              ingredients: [5] },
+  "Black Star Canyon":       { date: "Sep 1, 2026",  rating: "Loved it!",   difficulty: 3, caption: "Spooky and stunning.",             ingredients: [0, 3] },
+  "Buck Gully Trail":        { date: "Aug 25, 2026", rating: "Not for me",  difficulty: 2, caption: "Too crowded.",                     ingredients: [4] },
+  "Laguna Coast Loop":       { date: "Aug 18, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [2] },
+  "Santiago Oaks":           { date: "Aug 10, 2026", rating: "Loved it!",   difficulty: 2, caption: "Great for a hot day.",             ingredients: [6] },
+  "Moro Canyon Trail":       { date: "Aug 4, 2026",  rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [0, 1] },
+  "Red Rock Canyon":         { date: "Jul 28, 2026", rating: "Loved it!",   difficulty: 3, caption: "Gorgeous rock formations.",        ingredients: [3, 5] },
+};
+
+const ingredientCategories: { label: string; indices: number[] }[] = [
+  { label: "Sweet",        indices: [0] },
+  { label: "Dried Fruit",  indices: [1, 3, 6, 7, 8] },
+  { label: "Nuts & Seeds", indices: [2, 5, 11] },
+  { label: "Crunchy",      indices: [4, 9, 10] },
+];
+
 function GlobalStyles() {
   return (
     <style>{`
@@ -112,6 +142,26 @@ function GlobalStyles() {
         border-left: 6px solid transparent;
         border-right: 6px solid transparent;
         border-top: 10px solid #fffcf7;
+      }
+
+      /* ── Bottom nav: 4 tabs, full labels ── */
+      .bottom-nav {
+        display: flex !important;
+      }
+      .nav-tab {
+        flex: 1 !important;
+        min-width: 0 !important;
+        padding-left: 2px !important;
+        padding-right: 2px !important;
+      }
+      .nav-tab span {
+        font-size: 9px !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        text-align: center !important;
+        line-height: 1.2 !important;
+        max-width: 100% !important;
+        display: block !important;
       }
 
       /* ── Change 2: drag hint ── */
@@ -338,6 +388,280 @@ function GlobalStyles() {
         letter-spacing: 0.04em;
         font-weight: 700;
         flex-shrink: 0;
+      }
+
+      /* ── Accomplishments ── */
+      .accomplishments-screen {
+        padding: 0 0 24px;
+      }
+      .accom-header {
+        padding: 20px 16px 0;
+      }
+      .accom-header > h1 {
+        font-size: 26px;
+        font-weight: 700;
+        color: #3a2c1e;
+        margin: 0 0 16px;
+      }
+      .accom-stats-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        overflow-x: auto;
+      }
+      .accom-stat {
+        background: #f5f0e8;
+        border-radius: 12px;
+        padding: 10px 10px;
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+      }
+      .accom-stat b {
+        font-size: 16px;
+        color: #3a2c1e;
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+        display: block;
+        text-align: center;
+      }
+      .accom-stat small {
+        font-size: 10px;
+        color: #8a7e70;
+        text-align: center;
+        white-space: nowrap;
+      }
+      .accom-tabs {
+        display: flex;
+        border-bottom: 1.5px solid #e8dfd4;
+      }
+      .accom-tab-btn {
+        flex: 1;
+        background: none;
+        border: none;
+        padding: 10px 0 11px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #8a7e70;
+        cursor: pointer;
+        border-bottom: 2.5px solid transparent;
+        margin-bottom: -1.5px;
+      }
+      .accom-tab-btn.active {
+        color: #c2571f;
+        border-bottom-color: #c2571f;
+      }
+      .accomplishments-screen .mountain-scene {
+        margin: 16px 16px 0;
+      }
+      .accom-rank-list-section {
+        padding: 8px 16px 8px;
+      }
+      .accom-rank-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 12px;
+        border-radius: 10px;
+        cursor: grab;
+        user-select: none;
+        touch-action: none;
+        -webkit-user-select: none;
+      }
+      .accom-rank-item.dragging {
+        background: #fff0d8;
+        opacity: 0.9;
+      }
+      .accom-rank-item .ar-num {
+        font-size: 12px;
+        color: #8a7e70;
+        width: 26px;
+        flex-shrink: 0;
+        font-weight: 600;
+      }
+      .accom-rank-item .ar-name {
+        flex: 1;
+        font-size: 14px;
+        color: #3a2c1e;
+        font-weight: 500;
+      }
+      .accom-rank-item .ar-rating {
+        font-size: 15px;
+        flex-shrink: 0;
+      }
+      .accom-rank-item .ar-drag {
+        font-size: 16px;
+        color: #c8b89a;
+        flex-shrink: 0;
+      }
+      .hike-detail-overlay, .ingredient-hike-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.35);
+        z-index: 200;
+        display: flex;
+        align-items: flex-end;
+      }
+      .hike-detail-sheet, .ingredient-hike-sheet {
+        background: #fffcf7;
+        border-radius: 20px 20px 0 0;
+        padding: 8px 20px 36px;
+        width: 100%;
+        max-height: 72vh;
+        overflow-y: auto;
+        box-sizing: border-box;
+      }
+      .sheet-handle {
+        width: 36px;
+        height: 4px;
+        background: #ddd;
+        border-radius: 2px;
+        margin: 0 auto 16px;
+      }
+      .hike-detail-sheet h2, .ingredient-hike-sheet h2 {
+        font-size: 18px;
+        color: #3a2c1e;
+        margin: 0 0 4px;
+      }
+      .sheet-meta {
+        font-size: 13px;
+        color: #8a7e70;
+        margin-bottom: 16px;
+      }
+      .sheet-detail-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 0;
+        border-top: 1px solid #ede5d8;
+        font-size: 14px;
+        color: #3a2c1e;
+      }
+      .sheet-detail-row .sdr-label {
+        font-size: 12px;
+        color: #8a7e70;
+        width: 80px;
+        flex-shrink: 0;
+        padding-top: 1px;
+      }
+      .sheet-close-btn {
+        width: 100%;
+        margin-top: 20px;
+        padding: 13px;
+        background: #f0e8dc;
+        border: none;
+        border-radius: 12px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #5a3e2b;
+        cursor: pointer;
+        display: block;
+      }
+      .accom-jar-stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .accom-ingredient-categories {
+        padding: 16px 16px 0;
+      }
+      .accom-category {
+        margin-bottom: 22px;
+      }
+      .accom-category > h3 {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #8a7e70;
+        margin: 0 0 10px;
+      }
+      .accom-ingredient-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+      .accom-ingredient-cell {
+        background: #f5f0e8;
+        border-radius: 12px;
+        padding: 12px 6px 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+        border: 1.5px solid transparent;
+      }
+      .accom-ingredient-cell.unlocked {
+        cursor: pointer;
+      }
+      .accom-ingredient-cell.locked {
+        opacity: 0.42;
+        cursor: not-allowed;
+        filter: grayscale(0.7);
+      }
+      .accom-ingredient-cell img {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+      }
+      .accom-ingredient-cell .ai-name {
+        font-size: 11px;
+        font-weight: 600;
+        color: #3a2c1e;
+        text-align: center;
+      }
+      .accom-ingredient-cell .ai-count {
+        font-size: 10px;
+        color: #8a7e70;
+      }
+      .accom-ingredient-cell .ai-lock {
+        font-size: 24px;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .ingredient-hike-sheet .ids-img {
+        width: 64px;
+        height: 64px;
+        object-fit: contain;
+        display: block;
+        margin: 12px auto 8px;
+      }
+      .ingredient-hike-sheet h2 {
+        text-align: center;
+      }
+      .ids-subtitle {
+        font-size: 13px;
+        color: #8a7e70;
+        text-align: center;
+        margin-bottom: 14px;
+      }
+      .ids-hike-row {
+        padding: 10px 0;
+        border-top: 1px solid #ede5d8;
+        font-size: 14px;
+        color: #3a2c1e;
+      }
+      .ids-section-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #8a7e70;
+        margin-bottom: 6px;
+      }
+      .accom-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 24px;
+        gap: 16px;
       }
     `}</style>
   );
@@ -1065,6 +1389,301 @@ function Result({
   );
 }
 
+function AccomplishmentsMountain({
+  ranking,
+  setRanking,
+  onSelectHike,
+}: {
+  ranking: string[];
+  setRanking: (r: string[]) => void;
+  onSelectHike: (name: string) => void;
+}) {
+  const draggingIndex = useRef<number | null>(null);
+  const dragY = useRef(0);
+  const pointerStartY = useRef(0);
+  const [dragPos, setDragPos] = useState<number | null>(null);
+
+  const handleMove = (y: number) => {
+    if (draggingIndex.current === null) return;
+    const delta = y - dragY.current;
+    if (Math.abs(delta) > 42) {
+      const from = draggingIndex.current;
+      const to = from + (delta > 0 ? 1 : -1);
+      if (to < 0 || to >= ranking.length) return;
+      const next = [...ranking];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      draggingIndex.current = to;
+      dragY.current = y;
+      setRanking(next);
+      setDragPos(to);
+    }
+  };
+
+  const ratingColor = (r: string) =>
+    r === "Loved it!" ? "#e25e3f" : r === "Not for me" ? "#6e8370" : "#d5a23e";
+  const ratingIcon = (r: string) =>
+    r === "Loved it!" ? "♥" : r === "Not for me" ? "−" : "●";
+
+  return (
+    <div>
+      <div className="mountain-scene">
+        <div className="sun-disc" />
+        <div className="cloud cloud-one" />
+        <div className="cloud cloud-two" />
+        <svg aria-hidden="true" className="mountains" preserveAspectRatio="none" viewBox="0 0 390 430">
+          <path className="mountain-back" d="M-20 340 90 115l58 101 57-142 205 266Z" />
+          <path className="mountain-front" d="M-15 410 105 212l67 83 61-113 170 228Z" />
+          <path className="snow" d="m205 74 57 72-34-13-20 26-28-25-32 19Z" />
+          <path className="ridge" d="m22 382 87-167 65 81 61-113 145 201" />
+        </svg>
+        <div className="rank-list">
+          {ranking.slice(0, 4).map((name, index) => (
+            <div className={`rank-item rank-${index + 1}`} key={name}>
+              <span className="rank-number">#{index + 1}</span>
+              <span className="rank-name">{name}</span>
+            </div>
+          ))}
+        </div>
+        <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
+      </div>
+      <div className="accom-rank-list-section">
+        {ranking.map((name, index) => {
+          const hike = hikeDetails[name];
+          return (
+            <div
+              className={`accom-rank-item ${dragPos === index ? "dragging" : ""}`}
+              key={name}
+              onPointerDown={(e) => {
+                e.currentTarget.setPointerCapture(e.pointerId);
+                draggingIndex.current = index;
+                dragY.current = e.clientY;
+                pointerStartY.current = e.clientY;
+                setDragPos(index);
+              }}
+              onPointerMove={(e) => handleMove(e.clientY)}
+              onPointerUp={(e) => {
+                const isTap = Math.abs(e.clientY - pointerStartY.current) < 10;
+                draggingIndex.current = null;
+                setDragPos(null);
+                if (isTap) onSelectHike(name);
+              }}
+            >
+              <span className="ar-num">#{index + 1}</span>
+              <span className="ar-name">{name}</span>
+              {hike && (
+                <span className="ar-rating" style={{ color: ratingColor(hike.rating) }}>
+                  {ratingIcon(hike.rating)}
+                </span>
+              )}
+              <span className="ar-drag">⠿</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
+  const [subTab, setSubTab] = useState<"mountain" | "trailmix">("mountain");
+  const [accomRanking, setAccomRanking] = useState([
+    "Holy Jim Falls", "Bommer Canyon Loop", "Top of the World", "Crystal Cove Moro Ridge",
+    "Peters Canyon Loop", "Quail Hill Trail", "Black Star Canyon", "Buck Gully Trail",
+    "Laguna Coast Loop", "Santiago Oaks", "Moro Canyon Trail", "Red Rock Canyon",
+  ]);
+  const [selectedHike, setSelectedHike] = useState<string | null>(null);
+  const [selectedIngredient, setSelectedIngredient] = useState<number | null>(null);
+
+  const totalHikes = accomRanking.length;
+  const topHike = accomRanking[0];
+
+  const hikesForIngredient = (idx: number) =>
+    Object.entries(hikeDetails)
+      .filter(([, data]) => data.ingredients.includes(idx))
+      .map(([name]) => name);
+
+  const jarMix = useMemo(() => {
+    const types = detailOptions.slice(0, UNLOCKED_COUNT).map((d) => d.shape);
+    return Array.from({ length: 17 }, (_, i) => types[i % types.length]);
+  }, []);
+
+  const selectedHikeData = selectedHike ? hikeDetails[selectedHike] : null;
+  const diffLabel = (d: number) => ["Easy", "Moderate", "Tough"][d - 1];
+  const ratingColor = (r: string) =>
+    r === "Loved it!" ? "#e25e3f" : r === "Not for me" ? "#6e8370" : "#d5a23e";
+  const ratingIcon = (r: string) =>
+    r === "Loved it!" ? "♥" : r === "Not for me" ? "−" : "●";
+
+  return (
+    <section className="screen-content accomplishments-screen">
+      <div className="accom-header">
+        <h1>Accomplishments</h1>
+        <div className="accom-stats-row">
+          <div className="accom-stat">
+            <b>{totalHikes}</b>
+            <small>hikes</small>
+          </div>
+          <div className="accom-stat">
+            <b>47.2 mi</b>
+            <small>miles</small>
+          </div>
+          <div className="accom-stat">
+            <b>{UNLOCKED_COUNT} of {detailOptions.length}</b>
+            <small>ingredients</small>
+          </div>
+          <div className="accom-stat" style={{ flex: 2, minWidth: 0 }}>
+            <b style={{ fontSize: 12 }}>{topHike}</b>
+            <small>current #1</small>
+          </div>
+        </div>
+        <div className="accom-tabs">
+          <button
+            className={`accom-tab-btn ${subTab === "mountain" ? "active" : ""}`}
+            onClick={() => setSubTab("mountain")}
+            type="button"
+          >
+            Mountain
+          </button>
+          <button
+            className={`accom-tab-btn ${subTab === "trailmix" ? "active" : ""}`}
+            onClick={() => setSubTab("trailmix")}
+            type="button"
+          >
+            TrailMix
+          </button>
+        </div>
+      </div>
+
+      {subTab === "mountain" && (
+        totalHikes === 0 ? (
+          <div className="accom-empty">
+            <Mascot variant="sleepy" />
+            <button className="primary-button" onClick={onLogHike} type="button">
+              Log a Hike →
+            </button>
+          </div>
+        ) : (
+          <AccomplishmentsMountain
+            onSelectHike={setSelectedHike}
+            ranking={accomRanking}
+            setRanking={setAccomRanking}
+          />
+        )
+      )}
+
+      {subTab === "trailmix" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "center", padding: "16px 16px 0" }}>
+            <Mascot variant="celebrate" />
+          </div>
+          <div className="accom-jar-stage">
+            <div className="jar-lid"><span /><span /><span /></div>
+            <div className="jar">
+              <div className="jar-shine" />
+              <div className="mix">
+                {jarMix.map((type, i) => (
+                  <Ingredient className={`piece piece-${i}`} key={i} type={type} />
+                ))}
+              </div>
+              <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>Alex's jar</small></div>
+            </div>
+            <div className="ground-shadow" />
+          </div>
+          <div className="accom-ingredient-categories">
+            {ingredientCategories.map((cat) => (
+              <div className="accom-category" key={cat.label}>
+                <h3>{cat.label}</h3>
+                <div className="accom-ingredient-grid">
+                  {cat.indices.map((idx) => {
+                    const opt = detailOptions[idx];
+                    const isUnlocked = idx < UNLOCKED_COUNT;
+                    const hikeCount = hikesForIngredient(idx).length;
+                    return (
+                      <div
+                        className={`accom-ingredient-cell ${isUnlocked ? "unlocked" : "locked"}`}
+                        key={idx}
+                        onClick={() => { if (isUnlocked) setSelectedIngredient(idx); }}
+                      >
+                        {isUnlocked ? (
+                          <img alt={opt.ingredient} src={opt.icon} />
+                        ) : (
+                          <div className="ai-lock">🔒</div>
+                        )}
+                        <span className="ai-name">{opt.ingredient}</span>
+                        {isUnlocked ? (
+                          <span className="ai-count">{hikeCount} {hikeCount === 1 ? "hike" : "hikes"}</span>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {selectedHike && selectedHikeData && (
+        <div className="hike-detail-overlay" onClick={() => setSelectedHike(null)}>
+          <div className="hike-detail-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <h2>{selectedHike}</h2>
+            <div className="sheet-meta">
+              #{accomRanking.indexOf(selectedHike) + 1} in your rankings · {selectedHikeData.date}
+            </div>
+            <div className="sheet-detail-row">
+              <span className="sdr-label">Reaction</span>
+              <span style={{ color: ratingColor(selectedHikeData.rating), fontWeight: 600 }}>
+                {ratingIcon(selectedHikeData.rating)} {selectedHikeData.rating}
+              </span>
+            </div>
+            <div className="sheet-detail-row">
+              <span className="sdr-label">Difficulty</span>
+              <span>{diffLabel(selectedHikeData.difficulty)}</span>
+            </div>
+            {selectedHikeData.ingredients.length > 0 && (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Trail mix</span>
+                <span>{selectedHikeData.ingredients.map((i) => detailOptions[i].ingredient).join(", ")}</span>
+              </div>
+            )}
+            {selectedHikeData.caption ? (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Caption</span>
+                <span style={{ fontStyle: "italic" }}>"{selectedHikeData.caption}"</span>
+              </div>
+            ) : null}
+            <button className="sheet-close-btn" onClick={() => setSelectedHike(null)} type="button">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {selectedIngredient !== null && (
+        <div className="ingredient-hike-overlay" onClick={() => setSelectedIngredient(null)}>
+          <div className="ingredient-hike-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+            <img alt={detailOptions[selectedIngredient].ingredient} className="ids-img" src={detailOptions[selectedIngredient].icon} />
+            <h2>{detailOptions[selectedIngredient].ingredient}</h2>
+            <div className="ids-subtitle">
+              Unlocked for {detailOptions[selectedIngredient].label.toLowerCase()} on the trail
+            </div>
+            <div className="ids-section-label">Hikes that added this</div>
+            {hikesForIngredient(selectedIngredient).map((name) => (
+              <div className="ids-hike-row" key={name}>{name}</div>
+            ))}
+            <button className="sheet-close-btn" onClick={() => setSelectedIngredient(null)} type="button">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function App() {
   document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
@@ -1096,6 +1715,11 @@ export default function App() {
       {tab === "feed" && (
         <Shell>
           <Feed onUpdatePost={updatePost} posts={posts} />
+        </Shell>
+      )}
+      {tab === "accomplishments" && (
+        <Shell>
+          <Accomplishments onLogHike={() => switchTab("log")} />
         </Shell>
       )}
       {tab === "profile" && showSettings && (
