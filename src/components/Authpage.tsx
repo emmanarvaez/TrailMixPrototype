@@ -26,7 +26,7 @@ export default function Authpage({ onAuthenticated }: { onAuthenticated: (user: 
     const normalizedEmail = email.trim();
 
     if (isSignUp && !name.trim()) {
-      setError("Add your name to create an account.");
+      setError("Enter a username to create an account.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
@@ -124,8 +124,8 @@ export default function Authpage({ onAuthenticated }: { onAuthenticated: (user: 
         <form className="auth-form" noValidate onSubmit={submit}>
           {isSignUp && (
             <label className="auth-field">
-              <span>Your name</span>
-              <input autoComplete="name" onChange={(event) => setName(event.target.value)} placeholder="Alex Morgan" required value={name} />
+              <span>Username</span>
+              <input autoComplete="name" onChange={(event) => setName(event.target.value)} placeholder="Enter your username" required value={name} />
             </label>
           )}
           <label className="auth-field">
