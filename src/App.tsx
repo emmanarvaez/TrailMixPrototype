@@ -4,7 +4,8 @@ import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
-import { friends, initialFeedPosts, type FeedPost } from "./data/feedPosts";
+import { UsersContext, profileFromAuth } from "./context/UsersContext";
+import { friends, initialFeedPosts, type FeedPost, type Friend } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
 
 const detailOptions = [
@@ -1687,6 +1688,16 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
   const [user, setUser] = useState<AuthUser | null>(null);
+  // Every profile we know about, by user ID. Signed-in accounts are added and
+  // kept here so their comments still resolve after someone else signs in.
+  const [users, setUsers] = useState<Record<string, Friend>>(() =>
+    Object.fromEntries(Object.values(friends).map((friend) => [friend.id, friend])),
+  );
+
+  const setActiveUser = (next: AuthUser) => {
+    setUser(next);
+    setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
+  };
   const [friendUsernames, setFriendUsernames] = useState(() => Object.values(friends).map((friend) => friend.username));
 
   const switchTab = (next: Tab) => {
@@ -1705,10 +1716,10 @@ export default function App() {
     );
   };
 
-  if (!user) return <Authpage onAuthenticated={setUser} />;
+  if (!user) return <Authpage onAuthenticated={setActiveUser} />;
 
   return (
-    <>
+    <UsersContext.Provider value={{ currentUser: users[user.id] ?? profileFromAuth(user), users }}>
       {tab === "feed" && (
         <Shell>
           <Feed onUpdatePost={updatePost} posts={posts} />
@@ -1721,7 +1732,7 @@ export default function App() {
       )}
       {tab === "profile" && showSettings && (
         <Shell onBack={() => setShowSettings(false)}>
-          <Settings onUpdateUser={(changes) => setUser({ ...user, ...changes })} user={user} />
+          <Settings onUpdateUser={(changes) => setActiveUser({ ...user, ...changes })} user={user} />
         </Shell>
       )}
       {tab === "profile" && !showSettings && (
@@ -1757,7 +1768,7 @@ export default function App() {
         />
       </div>
       <BottomNav active={tab} onChange={switchTab} />
-    </>
+    </UsersContext.Provider>
   );
 }
 
@@ -1804,11 +1815,7 @@ function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void;
         const completedTrail = selectedTrail ?? trails[0];
         onLogHike({
           id: `post-${Date.now()}`,
-          friend: {
-            name: user.name,
-            username: user.email.split("@")[0].toLowerCase(),
-            color: "#e66a3c",
-          },
+          friend: profileFromAuth(user),
           trail: completedTrail,
           image: completedTrail.image,
           caption: caption.trim() || `A day out on ${completedTrail.name}.`,

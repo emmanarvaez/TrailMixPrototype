@@ -1,14 +1,18 @@
 import { findTrail, trailPhotos, type Trail } from "./trails";
 
 export type Friend = {
+  id: string;
   name: string;
   username: string;
   color: string;
+  avatar?: string; // image URL or data URL; falls back to the initial on `color`
 };
 
+// Comments reference their author by user ID, and the name/avatar are looked up
+// when rendering, so each comment always stays tied to the person who wrote it.
 export type PostComment = {
   id: string;
-  author: Friend;
+  authorId: string;
   text: string;
 };
 
@@ -28,14 +32,12 @@ export type FeedPost = {
   taggedUsers?: string[];
 };
 
-export const currentUser: Friend = { name: "Alex", username: "alex.hikes", color: "#e66a3c" };
-
 export const friends: Record<string, Friend> = {
-  caine: { name: "Caine", username: "caine.climbs", color: "#244f3b" },
-  kaylee: { name: "Kaylee", username: "kayleeq", color: "#c2571f" },
-  oscar: { name: "Oscar", username: "oscar_outside", color: "#6d8b68" },
-  amanda: { name: "Amanda", username: "amanda.trails", color: "#d5a23e" },
-  emma: { name: "Emma", username: "emma.wanders", color: "#7a4e2a" },
+  caine: { id: "mock-caine", name: "Caine", username: "caine.climbs", color: "#244f3b" },
+  kaylee: { id: "mock-kaylee", name: "Kaylee", username: "kayleeq", color: "#c2571f" },
+  oscar: { id: "mock-oscar", name: "Oscar", username: "oscar_outside", color: "#6d8b68" },
+  amanda: { id: "mock-amanda", name: "Amanda", username: "amanda.trails", color: "#d5a23e" },
+  emma: { id: "mock-emma", name: "Emma", username: "emma.wanders", color: "#7a4e2a" },
 };
 
 export const initialFeedPosts: FeedPost[] = [
@@ -51,8 +53,8 @@ export const initialFeedPosts: FeedPost[] = [
     saved: false,
     taggedUsers: ["alex", "alex.hikes"],
     comments: [
-      { id: "c-1", author: friends.emma, text: "No way, it's never running when I go 😭" },
-      { id: "c-2", author: friends.caine, text: "Adding this to the list for next weekend" },
+      { id: "c-1", authorId: friends.emma.id, text: "No way, it's never running when I go 😭" },
+      { id: "c-2", authorId: friends.caine.id, text: "Adding this to the list for next weekend" },
     ],
   },
   {
@@ -66,7 +68,7 @@ export const initialFeedPosts: FeedPost[] = [
     liked: false,
     saved: false,
     taggedUsers: ["alex", "alex.hikes"],
-    comments: [{ id: "c-3", author: friends.amanda, text: "Golden hour king 👑" }],
+    comments: [{ id: "c-3", authorId: friends.amanda.id, text: "Golden hour king 👑" }],
   },
   {
     id: "post-3",
@@ -79,8 +81,8 @@ export const initialFeedPosts: FeedPost[] = [
     liked: false,
     saved: false,
     comments: [
-      { id: "c-4", author: friends.kaylee, text: "That last climb is brutal" },
-      { id: "c-5", author: friends.oscar, text: "@kayleeq brutal is an understatement" },
+      { id: "c-4", authorId: friends.kaylee.id, text: "That last climb is brutal" },
+      { id: "c-5", authorId: friends.oscar.id, text: "@kayleeq brutal is an understatement" },
     ],
   },
   {
@@ -105,6 +107,6 @@ export const initialFeedPosts: FeedPost[] = [
     likes: 64,
     liked: false,
     saved: false,
-    comments: [{ id: "c-6", author: friends.caine, text: "Welcome back!! 🙌" }],
+    comments: [{ id: "c-6", authorId: friends.caine.id, text: "Welcome back!! 🙌" }],
   },
 ];

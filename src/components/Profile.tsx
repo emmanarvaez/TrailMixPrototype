@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import HikePost from "./HikePost";
-import { currentUser, friends, type FeedPost, type Friend } from "../data/feedPosts";
+import { friends, type FeedPost, type Friend } from "../data/feedPosts";
 import type { AuthUser } from "./Authpage";
+import { usernameFor } from "../context/UsersContext";
 
 const suggestions: Friend[] = [
-  { name: "Maya Chen", username: "mayatreks", color: "#4b806b" },
-  { name: "Luca Rivera", username: "lucarambles", color: "#b75d3d" },
-  { name: "Nina Brooks", username: "ninabrooks", color: "#71819a" },
+  { id: "mock-maya", name: "Maya Chen", username: "mayatreks", color: "#4b806b" },
+  { id: "mock-luca", name: "Luca Rivera", username: "lucarambles", color: "#b75d3d" },
+  { id: "mock-nina", name: "Nina Brooks", username: "ninabrooks", color: "#71819a" },
 ];
 
 type ProfileTab = "posts" | "tagged" | "friends";
@@ -31,7 +32,7 @@ export default function Profile({
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
   const [showAddFriends, setShowAddFriends] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
-  const username = user.email.split("@")[0].toLowerCase();
+  const username = usernameFor(user);
   const identity = [username, user.name.toLowerCase()];
   const ownPosts = posts.filter((post) => identity.includes(post.friend.username.toLowerCase()));
   const taggedPosts = posts.filter((post) => post.taggedUsers?.some((tag) => identity.includes(tag.toLowerCase())));
@@ -45,11 +46,8 @@ export default function Profile({
   const renderPost = (post: FeedPost) => (
     <HikePost
       key={post.id}
-      onAddComment={(text) =>
-        onUpdatePost(post.id, (current) => ({
-          ...current,
-          comments: [...current.comments, { id: `c-${Date.now()}`, author: currentUser, text }],
-        }))
+      onAddComment={(comment) =>
+        onUpdatePost(post.id, (current) => ({ ...current, comments: [...current.comments, comment] }))
       }
       onToggleLike={() =>
         onUpdatePost(post.id, (current) => ({

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import HikePost from "./HikePost";
-import { currentUser, type FeedPost } from "../data/feedPosts";
+import type { FeedPost } from "../data/feedPosts";
 
 export default function Feed({
   posts,
@@ -42,11 +42,8 @@ export default function Feed({
           {visiblePosts.map((post) => (
             <HikePost
               key={post.id}
-              onAddComment={(text) =>
-                onUpdatePost(post.id, (current) => ({
-                  ...current,
-                  comments: [...current.comments, { id: `c-${Date.now()}`, author: currentUser, text }],
-                }))
+              onAddComment={(comment) =>
+                onUpdatePost(post.id, (current) => ({ ...current, comments: [...current.comments, comment] }))
               }
               onToggleLike={() =>
                 onUpdatePost(post.id, (current) => ({

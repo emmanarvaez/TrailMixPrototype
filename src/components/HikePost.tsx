@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
-import type { FeedPost } from "../data/feedPosts";
+import { useUsers } from "../context/UsersContext";
+import type { FeedPost, Friend, PostComment } from "../data/feedPosts";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   return (
@@ -25,6 +26,14 @@ function BookmarkIcon({ filled }: { filled: boolean }) {
   );
 }
 
+function Avatar({ person, className }: { person: Friend; className: string }) {
+  return (
+    <span aria-hidden="true" className={className} style={{ background: person.color }}>
+      {person.avatar ? <img alt="" src={person.avatar} /> : person.name.charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
 function formatDate(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -42,18 +51,19 @@ export default function HikePost({
   post: FeedPost;
   onToggleLike: () => void;
   onToggleSave: () => void;
-  onAddComment: (text: string) => void;
+  onAddComment: (comment: PostComment) => void;
 }) {
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
+  const { currentUser, getUser } = useUsers();
   const { friend, trail } = post;
 
   const submitComment = (event: FormEvent) => {
     event.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    onAddComment(text);
+    onAddComment({ id: `c-${Date.now()}`, authorId: currentUser.id, text });
     setDraft("");
   };
 
@@ -66,7 +76,7 @@ export default function HikePost({
   return (
     <article className="hike-post">
       <header className="post-header">
-        <span className="post-avatar" style={{ background: friend.color }}>{friend.name.charAt(0)}</span>
+        <Avatar className="post-avatar" person={friend} />
         <div className="post-author">
           <span className="post-author-line">
             <b>{friend.name}</b>
@@ -135,20 +145,28 @@ export default function HikePost({
 
         {showComments && (
           <div className="post-comments">
-            {post.comments.map((comment) => (
-              <p className="post-comment" key={comment.id}>
-                <b>{comment.author.username}</b>
-                {comment.text}
-              </p>
-            ))}
+            {post.comments.map((comment) => {
+              const author = getUser(comment.authorId);
+              return (
+                <div className="post-comment" key={comment.id}>
+                  <Avatar className="comment-avatar" person={author} />
+                  <p>
+                    <b>{author.name}</b>
+                    <small>@{author.username}</small>
+                    {comment.text}
+                  </p>
+                </div>
+              );
+            })}
             {post.comments.length === 0 && <p className="post-comment empty">No comments yet. Say something nice!</p>}
             <form className="comment-form" onSubmit={submitComment}>
+              <Avatar className="comment-avatar" person={currentUser} />
               <input
                 aria-label="Add a comment"
                 autoFocus
                 maxLength={200}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Add a comment..."
+                placeholder={`Comment as @${currentUser.username}...`}
                 value={draft}
               />
               <button disabled={!draft.trim()} type="submit">Post</button>
