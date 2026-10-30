@@ -10,7 +10,7 @@ const suggestions: Friend[] = [
   { id: "mock-nina", name: "Nina Brooks", username: "ninabrooks", color: "#71819a" },
 ];
 
-type ProfileTab = "posts" | "tagged" | "friends";
+type ProfileTab = "posts" | "saved" | "tagged" | "friends";
 
 export default function Profile({
   user,
@@ -35,13 +35,15 @@ export default function Profile({
   const username = usernameFor(user);
   const identity = [username, user.name.toLowerCase()];
   const ownPosts = posts.filter((post) => identity.includes(post.friend.username.toLowerCase()));
+  const savedPosts = posts.filter((post) => post.saved);
   const taggedPosts = posts.filter((post) => post.taggedUsers?.some((tag) => identity.includes(tag.toLowerCase())));
   const directory = useMemo(() => [...Object.values(friends), ...suggestions], []);
   const visibleFriends = directory.filter((friend) => friendUsernames.includes(friend.username));
   const matchingSuggestions = suggestions.filter((friend) =>
     `${friend.name} ${friend.username}`.toLowerCase().includes(friendQuery.trim().toLowerCase()),
   );
-  const visiblePosts = activeTab === "posts" ? ownPosts : taggedPosts;
+  const visiblePosts =
+    activeTab === "posts" ? ownPosts : activeTab === "saved" ? savedPosts : taggedPosts;
 
   const renderPost = (post: FeedPost) => (
     <HikePost
@@ -90,7 +92,7 @@ export default function Profile({
       </div>
 
       <div aria-label="Profile sections" className="profile-tabs" role="tablist">
-        {(["posts", "tagged", "friends"] as const).map((tab) => (
+        {(["posts", "saved", "tagged", "friends"] as const).map((tab) => (
           <button
             aria-selected={activeTab === tab}
             className={activeTab === tab ? "selected" : ""}
@@ -99,7 +101,7 @@ export default function Profile({
             role="tab"
             type="button"
           >
-            {tab === "tagged" ? "Tagged Posts" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -121,14 +123,41 @@ export default function Profile({
           )}
         </section>
       ) : visiblePosts.length > 0 ? (
-        <div aria-label={activeTab === "posts" ? "Your posts" : "Posts you are tagged in"} className="profile-posts">
+        <div
+          aria-label={
+            activeTab === "posts"
+              ? "Your posts"
+              : activeTab === "saved"
+                ? "Your saved hikes"
+                : "Posts you are tagged in"
+          }
+          className="profile-posts"
+        >
           {visiblePosts.map(renderPost)}
         </div>
       ) : (
         <div className="profile-empty">
-          <span aria-hidden="true" className="profile-empty-mark">{activeTab === "posts" ? "↗" : "@"}</span>
-          <h2>{activeTab === "posts" ? "Your trail stories start here" : "No tagged hikes yet"}</h2>
-          <p>{activeTab === "posts" ? "Log a hike and share the view with your crew." : "When a friend tags you in a hike, it will show up here."}</p>
+          <span aria-hidden="true" className="profile-empty-mark">
+            {activeTab === "posts" ? "↗" : activeTab === "saved" ? (
+              <svg fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M6 3.5h12a1 1 0 0 1 1 1v16l-7-4.6-7 4.6v-16a1 1 0 0 1 1-1Z" />
+              </svg>
+            ) : "@"}
+          </span>
+          <h2>
+            {activeTab === "posts"
+              ? "Your trail stories start here"
+              : activeTab === "saved"
+                ? "No saved hikes yet"
+                : "No tagged hikes yet"}
+          </h2>
+          <p>
+            {activeTab === "posts"
+              ? "Log a hike and share the view with your crew."
+              : activeTab === "saved"
+                ? "Save a hike from the feed and it will show up here."
+                : "When a friend tags you in a hike, it will show up here."}
+          </p>
           {activeTab === "posts" && <button className="profile-empty-action" onClick={onLogHike} type="button">Log a hike</button>}
         </div>
       )}
