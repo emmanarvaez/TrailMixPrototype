@@ -733,3 +733,18 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 /* ── Settings: sign out sits under everything else ── */
 .settings-signout { display: block; width: 100%; margin-top: 28px; }
 
+
+/* ── Usernames ── */
+.username-input { display: flex; align-items: center; height: 48px; border: 1.5px solid #d2cebe; border-radius: 13px; background: #fffdf8; padding-left: 13px; }
+.username-input:focus-within { border-color: var(--forest); box-shadow: 0 0 0 3px rgba(36,79,59,.1); }
+.username-input > span { color: var(--muted); font-family: "Inter:Semi Bold"; font-size: 14px; }
+.username-field .username-input input { flex: 1; min-width: 0; height: 100%; border: 0; box-shadow: none; background: transparent; padding: 0 13px 0 2px; outline: 0; font-family: "Inter:Regular"; font-size: 14px; }
+.username-status { color: var(--muted); font-family: "Inter:Regular"; font-size: 12px; }
+.username-status.available, .username-status.unchanged { color: var(--forest); font-family: "Inter:Semi Bold"; }
+.username-status.taken, .username-status.invalid, .username-status.error { color: #a83f2a; }
+.profile-friend-row > button.follow { background: var(--forest); border-color: var(--forest); color: #fffaf0; }
+.people-search-results { margin-bottom: 18px; }
+.post-tagged { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.post-tag-link { color: var(--forest); font-family: "Inter:Semi Bold"; }
+.pick-username-cashew { display: block; width: 130px; margin: -10px auto 8px; }
+.settings-form .username-field { color: var(--deep-forest); }

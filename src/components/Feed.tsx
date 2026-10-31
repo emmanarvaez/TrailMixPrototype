@@ -1,28 +1,74 @@
 import { useState } from "react";
 import HikePost from "./HikePost";
-import type { FeedPost } from "../types";
+import PeopleList from "./PeopleList";
+import { usePeopleSearch } from "./usePeopleSearch";
+import type { FeedPost, Friend } from "../types";
 
 export default function Feed({
   posts,
   loadError,
+  currentUserId,
+  following,
+  onToggleFollow,
+  onOpenProfile,
   onFindFriends,
 }: {
-  posts: FeedPost[] | null; // null while loading
+  posts: FeedPost[] | null; // you and the people you follow, newest first; null while loading
   loadError: string;
+  currentUserId: string;
+  following: string[];
+  onToggleFollow: (person: Friend) => void;
+  onOpenProfile: (id: string) => void;
   onFindFriends: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const search = query.trim().toLowerCase();
-  const allPosts = posts ?? [];
-  const visiblePosts = search
-    ? allPosts.filter((post) =>
-        [post.trail.name, post.friend.name, post.friend.username].some((value) => value.toLowerCase().includes(search)),
-      )
-    : allPosts;
+  const searching = query.trim().replace(/^@+/, "").length > 0;
+  const people = usePeopleSearch(query, currentUserId);
+
+  const searchBar = (
+    <label className="search-field feed-search">
+      <span aria-hidden="true">⌕</span>
+      <input
+        aria-label="Search for friends"
+        autoCapitalize="none"
+        autoCorrect="off"
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="Search for friends..."
+        value={query}
+      />
+      {query && (
+        <button aria-label="Clear search" className="search-clear" onClick={() => setQuery("")} type="button">×</button>
+      )}
+    </label>
+  );
+
+  // While typing, the feed shows people instead of hikes
+  if (searching) {
+    return (
+      <section className="screen-content feed-screen">
+        {searchBar}
+        <div className="section-heading"><h2>People</h2></div>
+        {people.error && <p className="trail-search-note" role="alert">Couldn't search: {people.error}</p>}
+        {!people.error && !people.searching && people.results.length === 0 && (
+          <p className="trail-search-note">No one found with that username.</p>
+        )}
+        <div className="people-search-results">
+          <PeopleList
+            currentUserId={currentUserId}
+            following={following}
+            onOpenProfile={onOpenProfile}
+            onToggleFollow={onToggleFollow}
+            people={people.results}
+          />
+        </div>
+      </section>
+    );
+  }
 
   if (posts !== null && posts.length === 0 && !loadError) {
     return (
       <section className="screen-content feed-screen">
+        {searchBar}
         <div className="feed-empty feed-empty-start">
           <img alt="" src="/assets/cashew-11-sleepy.svg" />
           <h2>No hikes yet!</h2>
@@ -35,39 +81,16 @@ export default function Feed({
 
   return (
     <section className="screen-content feed-screen">
-      <label className="search-field feed-search">
-        <span aria-hidden="true">⌕</span>
-        <input
-          aria-label="Search your friends' hikes"
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search your friends' hikes..."
-          value={query}
-        />
-        {query && (
-          <button aria-label="Clear search" className="search-clear" onClick={() => setQuery("")} type="button">×</button>
-        )}
-      </label>
-
+      {searchBar}
       <div className="section-heading">
-        <h2>{search ? "Matching hikes" : "From your trail crew"}</h2>
-        <span>{visiblePosts.length} {visiblePosts.length === 1 ? "hike" : "hikes"}</span>
+        <h2>From your trail crew</h2>
+        <span>{(posts ?? []).length} {(posts ?? []).length === 1 ? "hike" : "hikes"}</span>
       </div>
-
       {loadError && <p className="trail-search-note" role="alert">Couldn't load the feed: {loadError}</p>}
       {!loadError && posts === null && <p className="trail-search-note">Loading hikes…</p>}
-
-      {visiblePosts.length > 0 ? (
-        <div className="feed-list">
-          {visiblePosts.map((post) => <HikePost key={post.id} post={post} />)}
-        </div>
-      ) : search ? (
-        <div className="feed-empty">
-          <img alt="" src="/assets/cashew.svg" />
-          <h2>No hikes found</h2>
-          <p>None of your friends have logged a hike matching “{query.trim()}” yet.</p>
-          <button onClick={() => setQuery("")} type="button">Clear search</button>
-        </div>
-      ) : null}
+      <div className="feed-list">
+        {(posts ?? []).map((post) => <HikePost key={post.id} post={post} />)}
+      </div>
     </section>
   );
 }

@@ -5,11 +5,12 @@ import Feed from "./components/Feed";
 import FindFriends from "./components/FindFriends";
 import HikePost from "./components/HikePost";
 import MountainScene from "./components/MountainScene";
+import PickUsername from "./components/PickUsername";
 import Tour from "./components/Tour";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import { PostsContext, usePostsStore } from "./context/PostsContext";
-import { UsersContext, profileFromAuth } from "./context/UsersContext";
+import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
 import {
   MAX_MEDIA,
   fetchFollowing,
@@ -1176,11 +1177,13 @@ function AddDetails({
   );
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)), [previews]);
   const [friend, setFriend] = useState("");
-  const query = friend.trim().toLowerCase();
-  const friendSuggestions = query
+  // Typing just "@" lists everyone you follow; anything after it narrows by username or name
+  const typedAt = friend.trim().startsWith("@");
+  const query = friend.trim().replace(/^@+/, "").toLowerCase();
+  const friendSuggestions = query || typedAt
     ? friends.filter(
         (person) =>
-          `${person.name} ${person.username}`.toLowerCase().includes(query) && !taggedIds.includes(person.id),
+          `${person.username} ${person.name}`.toLowerCase().includes(query) && !taggedIds.includes(person.id),
       )
     : [];
   const taggedFriends = taggedIds.map((id) => friends.find((person) => person.id === id)).filter((person): person is Friend => !!person);
@@ -1311,20 +1314,20 @@ function AddDetails({
                   tagFriend(friendSuggestions[0]);
                 }
               }}
-              placeholder={friends.length ? "Search friends" : "Add friends to tag them in hikes"}
+              placeholder={friends.length ? "Type @ or a username" : "Follow friends to tag them in hikes"}
               value={friend}
             />
           </div>
-          {query && (
+          {(query || typedAt) && (
             <div className="friend-results">
               {friendSuggestions.length ? friendSuggestions.map((person) => (
                 <button key={person.id} onClick={() => tagFriend(person)} type="button">
                   <span className="friend-avatar" style={{ background: person.color }}>{person.name.charAt(0).toUpperCase()}</span>
-                  <span><b>{person.name}</b><small>@{person.username}</small></span>
+                  <span><b>{handle(person) || person.name}</b>{handle(person) && <small>{person.name}</small>}</span>
                   <i>+</i>
                 </button>
               )) : (
-                <p>No TrailMix friends found</p>
+                <p>{friends.length ? "No one you follow matches that" : "Follow people to tag them in hikes"}</p>
               )}
             </div>
           )}
@@ -1339,7 +1342,7 @@ function AddDetails({
                   type="button"
                 >
                   <span className="chip-avatar">{person.name.charAt(0).toUpperCase()}</span>
-                  {person.name}
+                  {handle(person) || person.name}
                   <span aria-hidden="true" className="chip-remove">×</span>
                 </button>
               ))}
@@ -2020,6 +2023,11 @@ export default function App() {
     );
   }
 
+  // Accounts from before usernames pick one first, before anything else
+  if (!user.username) {
+    return <PickUsername name={user.name} onPicked={(username) => setActiveUser({ ...user, username })} userId={user.id} />;
+  }
+
   const finishTour = (next?: Tab) => {
     setShowTour(false);
     if (next) switchTab(next);
@@ -2048,8 +2056,8 @@ export default function App() {
       {view?.kind === "profile" && (
         <Shell onBack={goBack}>
           <Profile
+            currentUserId={user.id}
             following={following}
-            friends={[]}
             isOwn={false}
             key={view.id}
             onFindFriends={() => setShowFindFriends(true)}
@@ -2057,7 +2065,7 @@ export default function App() {
             onOpenPost={openPost}
             onOpenProfile={openProfile}
             onToggleFollow={toggleFollow}
-            profile={users[view.id] ?? { id: view.id, name: "TrailMix hiker", username: "hiker", color: "#9ba196" }}
+            profile={users[view.id] ?? { id: view.id, name: "TrailMix hiker", username: "", color: "#9ba196" }}
             ranking={otherRankings[view.id] ?? []}
           />
         </Shell>
@@ -2077,7 +2085,15 @@ export default function App() {
       <div hidden={!!view}>
       {tab === "feed" && (
         <Shell>
-          <Feed loadError={feedError} onFindFriends={() => setShowFindFriends(true)} posts={feedPosts} />
+          <Feed
+            currentUserId={user.id}
+            following={following}
+            loadError={feedError}
+            onFindFriends={() => setShowFindFriends(true)}
+            onOpenProfile={openProfile}
+            onToggleFollow={toggleFollow}
+            posts={feedPosts}
+          />
         </Shell>
       )}
       {tab === "accomplishments" && (
@@ -2118,8 +2134,8 @@ export default function App() {
           }
         >
           <Profile
+            currentUserId={user.id}
             following={following}
-            friends={friends}
             isOwn
             onFindFriends={() => setShowFindFriends(true)}
             onLogHike={() => switchTab("log")}

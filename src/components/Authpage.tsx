@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/lib/supabase";
+import { fetchMyProfile } from "@/lib/db";
+import UsernameField, { useUsernameCheck } from "./UsernameField";
 
 export type AuthUser = {
   id: string;
   name: string;
-  email: string;
+  username?: string; // missing for accounts made before usernames; they pick one on sign-in
+  email: string; // only ever shown to the user themselves
   phone?: string;
   avatar?: string;
 };
@@ -16,6 +19,8 @@ export default function Authpage({
 }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const usernameStatus = useUsernameCheck(username);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -31,6 +36,14 @@ export default function Authpage({
 
     if (isSignUp && !name.trim()) {
       setError("Add your name to create an account.");
+      return;
+    }
+    if (isSignUp && usernameStatus !== "available") {
+      setError(
+        usernameStatus === "taken" ? "That username is taken. Try another."
+          : usernameStatus === "checking" ? "Still checking that username. One sec!"
+          : "Pick a username to create an account.",
+      );
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
@@ -53,20 +66,18 @@ export default function Authpage({
         const { data, error: signUpError } = await supabase.auth.signUp({
           email: normalizedEmail,
           password,
-          options: { data: { name: displayName } },
+          // The profile (with this username) is created by the handle_new_user trigger
+          options: { data: { name: displayName, username } },
         });
-        if (signUpError) { setError(signUpError.message); return; }
+        if (signUpError) {
+          // The trigger fails if someone grabbed the username between the check and now
+          setError(/database error/i.test(signUpError.message) ? "That username was just taken. Try another." : signUpError.message);
+          return;
+        }
         const authUser = data.user;
         if (!authUser) { setError("Sign-up failed. Please try again."); return; }
 
-        // Insert profile row (also handled by the DB trigger, this is a fallback)
-        await supabase.from("profiles").upsert({
-          id: authUser.id,
-          name: displayName,
-          email: normalizedEmail,
-        });
-
-        onAuthenticated({ id: authUser.id, name: displayName, email: normalizedEmail }, { isNewAccount: true });
+        onAuthenticated({ id: authUser.id, name: displayName, username, email: normalizedEmail }, { isNewAccount: true });
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
@@ -76,18 +87,18 @@ export default function Authpage({
         const authUser = data.user;
         if (!authUser) { setError("Sign-in failed. Please try again."); return; }
 
-        // Fetch display name from profiles table
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("name, phone, avatar_url")
-          .eq("id", authUser.id)
-          .single();
+        // Name, username, photo and phone from the user's own profile
+        const profile = await fetchMyProfile().catch((profileError) => {
+          console.error("Couldn't load profile", profileError);
+          return null;
+        });
 
         const fallbackName = normalizedEmail.split("@")[0].replace(/[._-]+/g, " ")
           .replace(/\b\w/g, (l) => l.toUpperCase());
         onAuthenticated({
           id: authUser.id,
           name: profile?.name ?? fallbackName,
+          username: profile?.username ?? undefined,
           email: normalizedEmail,
           phone: profile?.phone ?? undefined,
           avatar: profile?.avatar_url ?? undefined,
@@ -132,6 +143,7 @@ export default function Authpage({
               <input autoComplete="name" onChange={(event) => setName(event.target.value)} placeholder="Alex Morgan" required value={name} />
             </label>
           )}
+          {isSignUp && <UsernameField onChange={setUsername} status={usernameStatus} value={username} />}
           <label className="auth-field">
             <span>Email address</span>
             <input autoComplete="email" onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required type="email" value={email} />

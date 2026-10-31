@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { searchProfiles } from "../lib/db";
+import { useState } from "react";
+import PeopleList from "./PeopleList";
+import { usePeopleSearch } from "./usePeopleSearch";
 import type { Friend } from "../types";
 
-// Bottom sheet for finding people by name or email and adding them as friends
+// Bottom sheet for finding people by username or name and following them
 export default function FindFriends({
   currentUserId,
   following,
@@ -17,35 +18,7 @@ export default function FindFriends({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Friend[]>([]);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState("");
-  const latestSearch = useRef(0);
-
-  useEffect(() => {
-    const searchId = ++latestSearch.current;
-    if (!query.trim()) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    const timer = window.setTimeout(() => {
-      searchProfiles(query, currentUserId)
-        .then((found) => {
-          if (searchId !== latestSearch.current) return;
-          setResults(found);
-          setError("");
-        })
-        .catch((searchError) => {
-          if (searchId === latestSearch.current) setError(searchError?.message ?? "Something went wrong.");
-        })
-        .finally(() => {
-          if (searchId === latestSearch.current) setSearching(false);
-        });
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query, currentUserId]);
+  const { results, searching, error } = usePeopleSearch(query, currentUserId);
 
   return (
     <div className="friend-sheet-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -57,40 +30,27 @@ export default function FindFriends({
         <label className="friend-search-field">
           <span aria-hidden="true">⌕</span>
           <input
-            aria-label="Search people"
+            aria-label="Search for friends"
+            autoCapitalize="none"
             autoFocus
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search by name or email..."
+            placeholder="Search for friends..."
             value={query}
           />
         </label>
         <div className="friend-suggestion-list">
           {error && <p className="friend-suggestion-empty" role="alert">Couldn't search: {error}</p>}
-          {!error && !query.trim() && <p className="friend-suggestion-empty">Search for someone you hike with.</p>}
+          {!error && !query.trim() && <p className="friend-suggestion-empty">Search by username or name.</p>}
           {!error && query.trim() && !searching && results.length === 0 && (
-            <p className="friend-suggestion-empty">No people found. Try another search.</p>
+            <p className="friend-suggestion-empty">No one found with that username.</p>
           )}
-          {results.map((person) => {
-            const isFriend = following.includes(person.id);
-            return (
-              <div className="profile-friend-row" key={person.id}>
-                <button className="profile-link profile-friend-person" onClick={() => onOpenProfile(person.id)} type="button">
-                  <span className="profile-friend-avatar" style={{ background: person.color }}>
-                    {person.avatar ? <img alt="" src={person.avatar} /> : person.name.charAt(0).toUpperCase()}
-                  </span>
-                  <span className="profile-friend-copy"><b>{person.name}</b><small>@{person.username}</small></span>
-                </button>
-                <button
-                  aria-pressed={isFriend}
-                  className={isFriend ? "added" : ""}
-                  onClick={() => onToggleFollow(person)}
-                  type="button"
-                >
-                  {isFriend ? "Added" : "Add"}
-                </button>
-              </div>
-            );
-          })}
+          <PeopleList
+            currentUserId={currentUserId}
+            following={following}
+            onOpenProfile={onOpenProfile}
+            onToggleFollow={onToggleFollow}
+            people={results}
+          />
         </div>
       </section>
     </div>

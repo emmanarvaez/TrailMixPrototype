@@ -1,6 +1,6 @@
 import { useRef, useState, type FormEvent } from "react";
 import { usePosts } from "../context/PostsContext";
-import { useUsers } from "../context/UsersContext";
+import { handle, useUsers } from "../context/UsersContext";
 import type { FeedPost, Friend, Media } from "../types";
 
 function HeartIcon({ filled }: { filled: boolean }) {
@@ -95,10 +95,12 @@ export default function HikePost({ post }: { post: FeedPost }) {
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
   const [commentError, setCommentError] = useState("");
-  const { currentUser, getUser, getRank, openProfile } = useUsers();
+  const { currentUser, users, getUser, getRank, openProfile } = useUsers();
   const { toggleLike, toggleSave, addComment } = usePosts();
   const onToggleLike = () => toggleLike(post.id);
-  const { friend, trail } = post;
+  const { trail } = post;
+  // The author's latest profile, so a changed username or photo shows on older posts too
+  const friend = users[post.friend.id] ?? post.friend;
   // The poster's own ranking, read live so it follows any later re-ranking
   const rank = getRank(friend.id, trail.name);
   const mountainOwner = friend.id === currentUser.id ? "your" : "their";
@@ -131,7 +133,7 @@ export default function HikePost({ post }: { post: FeedPost }) {
         <div className="post-author">
           <button className="post-author-line profile-link" onClick={() => openProfile(friend.id)} type="button">
             <b>{friend.name}</b>
-            <small>@{friend.username}</small>
+            {handle(friend) && <small>{handle(friend)}</small>}
           </button>
           <span className="post-trail">hiked <strong>{trail.name}</strong></span>
         </div>
@@ -198,11 +200,27 @@ export default function HikePost({ post }: { post: FeedPost }) {
         </div>
         <p className="post-caption">
           <button className="profile-link" onClick={() => openProfile(friend.id)} type="button">
-            <b>{friend.username}</b>
+            <b>{friend.username || friend.name}</b>
           </button>
           {/* Just the username when there's no caption; nothing is made up */}
           {post.caption}
         </p>
+        {post.taggedUserIds.length > 0 && (
+          <p className="post-tagged">
+            with{" "}
+            {post.taggedUserIds.map((id, index) => {
+              const person = getUser(id);
+              return (
+                <span key={id}>
+                  {index > 0 && ", "}
+                  <button className="profile-link post-tag-link" onClick={() => openProfile(id)} type="button">
+                    {handle(person) || person.name}
+                  </button>
+                </span>
+              );
+            })}
+          </p>
+        )}
 
         {showComments && (
           <div className="post-comments">
@@ -217,7 +235,7 @@ export default function HikePost({ post }: { post: FeedPost }) {
                     <button className="profile-link" onClick={() => openProfile(author.id)} type="button">
                       <b>{author.name}</b>
                     </button>
-                    <small>@{author.username}</small>
+                    {handle(author) && <small>{handle(author)}</small>}
                     {comment.text}
                   </p>
                 </div>
@@ -231,7 +249,7 @@ export default function HikePost({ post }: { post: FeedPost }) {
                 autoFocus
                 maxLength={200}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder={`Comment as @${currentUser.username}...`}
+                placeholder={`Comment as ${handle(currentUser) || currentUser.name}...`}
                 value={draft}
               />
               <button disabled={!draft.trim()} type="submit">Post</button>
