@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export type Tab = "feed" | "log" | "accomplishments" | "profile";
 
-const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
+export const navTabs: { id: Tab; label: string; icon: ReactNode }[] = [
   {
     id: "feed",
     label: "Feed",
@@ -48,10 +48,11 @@ const tabs: { id: Tab; label: string; icon: ReactNode }[] = [
 export default function BottomNav({ active, onChange }: { active: Tab; onChange: (tab: Tab) => void }) {
   return (
     <nav aria-label="Main" className="bottom-nav">
-      {tabs.map((tab) => (
+      {navTabs.map((tab) => (
         <button
           aria-current={active === tab.id ? "page" : undefined}
           className={`nav-tab ${active === tab.id ? "active" : ""}`}
+          data-tour={`nav-${tab.id}`}
           key={tab.id}
           onClick={() => onChange(tab.id)}
           type="button"

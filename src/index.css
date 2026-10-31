@@ -567,78 +567,75 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .post-comment b { margin-right: 4px; }
 .comment-form { padding-left: 8px; }
 
-/* ── Onboarding (shown once, right after sign-up) ── */
-.onboarding {
-  width: min(100%, 520px); min-height: 100dvh; margin: 0 auto;
-  display: flex; flex-direction: column;
-  padding: calc(14px + env(safe-area-inset-top)) 0 calc(18px + env(safe-area-inset-bottom));
-  background:
-    radial-gradient(circle at 10% 20%, rgba(218, 201, 158, .13) 0 1px, transparent 2px),
-    var(--cream);
-  background-size: 18px 18px;
-  overflow: hidden;
+
+/* ── Cashew's guided tour (shown once, right after sign-up) ── */
+.tour { position: fixed; inset: 0; z-index: 1000; }
+.tour-catcher { position: absolute; inset: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.tour-spot {
+  position: absolute; pointer-events: none; border-radius: 16px;
+  box-shadow: 0 0 0 200vmax rgba(18, 30, 23, .8), 0 0 0 3px rgba(255, 250, 240, .95), 0 0 28px 8px rgba(241, 189, 78, .55);
+  transition: left .35s ease, top .35s ease, width .35s ease, height .35s ease, border-radius .35s ease;
 }
-.ob-top { position: relative; display: flex; justify-content: center; align-items: center; min-height: 64px; padding: 0 18px; }
-.ob-ingredient {
-  width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--paper); border: 1.5px solid #e1dac9; box-shadow: 0 6px 16px rgba(37,67,47,.09);
-  animation: obPop .35s ease both;
+.tour-spot.waiting { box-shadow: 0 0 0 200vmax rgba(18, 30, 23, .8); }
+.tour-spot.nav {
+  border-radius: 50%; background: #fff; display: grid; place-items: center;
+  box-shadow: 0 0 0 200vmax rgba(18, 30, 23, .8), 0 10px 22px rgba(0, 0, 0, .28), 0 0 30px 10px rgba(241, 189, 78, .55);
 }
-.ob-ingredient img { width: 38px; height: 38px; object-fit: contain; }
-.ob-skip {
-  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+.tour-nav-tab {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0 6px;
+  color: var(--orange); font-family: "Inter:Semi Bold"; font-size: 9.5px; line-height: 1.15; text-align: center;
+  animation: tourPop .3s ease both;
+}
+.tour-nav-tab svg { width: 26px; height: 26px; }
+.tour-skip {
+  position: absolute; z-index: 2; top: calc(10px + env(safe-area-inset-top)); right: 10px;
+  min-height: 44px; padding: 0 16px; border: 0; border-radius: 22px; background: rgba(255, 250, 240, .14);
+  color: #fffaf0; font-family: "Inter:Semi Bold"; font-size: 15px;
+}
+.tour-skip:focus-visible, .tour-link:focus-visible { outline: 2px solid #fffaf0; outline-offset: 2px; }
+.tour-bubble {
+  position: relative; background: #fffcf7; border: 1.5px solid #d4b48a; border-radius: 16px;
+  padding: 12px 15px 11px; box-shadow: 0 8px 22px rgba(0, 0, 0, .22);
+  color: #3a2c1e; font-family: "Inter:Semi Bold"; font-size: 16px; line-height: 1.38;
+}
+.tour-bubble small { display: block; margin-top: 7px; color: #8a7e70; font-family: "Inter:Regular"; font-size: 12px; }
+.tour-tail {
+  position: absolute; width: 14px; height: 14px; background: #fffcf7; border: 1.5px solid #d4b48a; transform: rotate(45deg);
+}
+/* Centered steps: bubble above a big Cashew */
+.tour-center {
+  position: absolute; z-index: 1; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: center;
+  text-align: center; pointer-events: none; animation: tourCenterIn .35s ease both;
+}
+.tour-center .tour-bubble { margin-bottom: 10px; font-size: 18px; }
+.tour-center .tour-tail { left: calc(50% - 7px); bottom: -8.5px; border-top: 0; border-left: 0; }
+.tour-center > img {
+  width: min(68vw, 260px); height: auto;
+  /* Soft light behind Cashew so the art reads on the dark overlay */
+  background: radial-gradient(closest-side, rgba(255, 250, 240, .9) 30%, rgba(255, 250, 240, .45) 65%, rgba(255, 250, 240, 0));
+}
+.tour-actions { pointer-events: auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 14px; }
+.tour-link {
   min-height: 44px; padding: 0 12px; border: 0; background: transparent;
-  color: var(--forest); font-family: "Inter:Semi Bold"; font-size: 16px; text-decoration: underline; text-underline-offset: 4px;
+  color: #fffaf0; font-family: "Inter:Semi Bold"; font-size: 16px; text-decoration: underline; text-underline-offset: 4px;
 }
-.ob-viewport { flex: 1; display: flex; overflow: hidden; touch-action: pan-y; outline: none; user-select: none; -webkit-user-select: none; }
-.ob-viewport:focus-visible { box-shadow: inset 0 0 0 2px var(--forest); }
-.ob-track { flex: 0 0 100%; min-width: 0; display: flex; transition: transform .35s cubic-bezier(.3,.7,.3,1); }
-.ob-slide {
-  flex: 0 0 100%; min-width: 0; padding: 4px 24px 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-}
-.ob-mascot { position: relative; width: min(74vw, 290px); margin-bottom: 14px; }
-.ob-mascot img { display: block; width: 100%; height: auto; pointer-events: none; }
-.ob-bubble {
-  position: absolute; z-index: 1; top: -4px; left: 4%;
-  padding: 8px 14px; border: 1.5px solid #d4b48a; border-radius: 14px; background: #fffcf7;
-  box-shadow: 0 3px 10px rgba(100,60,20,.14); color: #5a3e2b; font-family: "Inter:Semi Bold"; font-size: 16px;
-}
-.ob-bubble::after {
-  content: ""; position: absolute; bottom: -9px; right: 18px; width: 14px; height: 14px;
-  background: #fffcf7; border-right: 1.5px solid #d4b48a; border-bottom: 1.5px solid #d4b48a; transform: rotate(45deg) skew(8deg, 8deg);
-}
-.ob-slide .eyebrow { margin-bottom: 10px; font-size: 13px; }
-.ob-slide h1 { max-width: 13em; font-size: clamp(30px, 8.4vw, 36px); }
-.ob-slide p { max-width: 22em; margin: 14px 0 0; color: #4e5a50; font-size: 18px; line-height: 1.45; }
-.ob-footer { display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 18px 24px 0; }
-/* Progress: a little kraft-paper bag that fills with one ingredient per screen */
-.ob-bag {
-  position: relative; display: flex; gap: 10px; padding: 14px 16px 10px;
-  border: 2px solid #3a2a1e; border-radius: 10px 10px 18px 18px; background: #e8d3ad;
-  box-shadow: inset 0 -6px 0 rgba(122, 78, 42, .12);
-}
-.ob-bag::before {
-  content: ""; position: absolute; left: -2px; right: -2px; top: -9px; height: 9px;
-  background: linear-gradient(135deg, transparent 50%, #3a2a1e 50% 62%, #e8d3ad 62%) 0 0 / 9px 9px repeat-x,
-              linear-gradient(225deg, transparent 50%, #3a2a1e 50% 62%, #e8d3ad 62%) 0 0 / 9px 9px repeat-x;
-}
-.ob-bag-slot {
-  width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
-  border: 2px dashed rgba(58, 42, 30, .35); background: rgba(255, 250, 240, .45);
-}
-.ob-bag-slot.filled { border: 0; background: transparent; }
-.ob-bag-slot img { width: 30px; height: 30px; object-fit: contain; animation: obDrop .4s cubic-bezier(.3,1.4,.5,1) both; }
-.ob-footer .primary-button { max-width: 440px; }
-.ob-explore {
-  min-height: 44px; padding: 0 12px; border: 0; background: transparent;
-  color: var(--forest); font-family: "Inter:Semi Bold"; font-size: 16px; text-decoration: underline; text-underline-offset: 4px;
-}
-.ob-explore.reserved { visibility: hidden; }
-@keyframes obPop { from { opacity: 0; transform: scale(.6) rotate(-12deg); } }
-@keyframes obDrop { from { opacity: 0; transform: translateY(-14px) scale(.7); } }
-@media (max-height: 700px) {
-  .ob-mascot { width: min(56vw, 210px); margin-bottom: 8px; }
-  .ob-slide p { font-size: 16px; }
-  .ob-footer { gap: 12px; }
+/* Targeted steps: Cashew beside the spotlight, bubble pointing at it */
+.tour-callout { position: absolute; z-index: 1; display: flex; align-items: flex-end; gap: 4px; pointer-events: none; animation: tourIn .3s ease both; }
+.tour-callout.below { align-items: flex-start; }
+.tour-callout.mascot-right { flex-direction: row-reverse; }
+.tour-callout .tour-bubble { flex: 1; min-width: 0; }
+.tour-mascot { width: 136px; height: auto; flex: none; }
+.tour-callout.above .tour-bubble { margin-bottom: 14px; }
+.tour-callout.below .tour-bubble { margin-top: 14px; }
+.tour-callout.above .tour-tail { bottom: -8.5px; border-top: 0; border-left: 0; }
+.tour-callout.below .tour-tail { top: -8.5px; border-bottom: 0; border-right: 0; }
+.tour-callout.mascot-left .tour-tail { left: 18px; }
+.tour-callout.mascot-right .tour-tail { right: 18px; }
+@keyframes tourIn { from { opacity: 0; transform: translateY(6px); } }
+@keyframes tourCenterIn { from { opacity: 0; transform: translate(-50%, -46%); } }
+@keyframes tourPop { from { opacity: 0; transform: scale(.7); } }
+@media (max-width: 360px) {
+  .tour-mascot { width: 104px; }
+  .tour-bubble { font-size: 15px; }
 }

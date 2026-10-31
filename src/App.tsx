@@ -2,10 +2,11 @@ import { useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
-import Onboarding from "./components/Onboarding";
+import Tour from "./components/Tour";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import { UsersContext, profileFromAuth } from "./context/UsersContext";
+import { supabase } from "./lib/supabase";
 import { friends, initialFeedPosts, type FeedPost, type Friend } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
 
@@ -1545,6 +1546,7 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
         <div className="accom-tabs">
           <button
             className={`accom-tab-btn ${subTab === "mountain" ? "active" : ""}`}
+            data-tour="mountain"
             onClick={() => setSubTab("mountain")}
             type="button"
           >
@@ -1695,8 +1697,8 @@ export default function App() {
     Object.fromEntries(Object.values(friends).map((friend) => [friend.id, friend])),
   );
 
-  // Only set by a successful sign-up, so returning users who sign in never see onboarding
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  // Only set by a successful sign-up, so returning users who sign in never see the tour
+  const [showTour, setShowTour] = useState(false);
 
   const setActiveUser = (next: AuthUser) => {
     setUser(next);
@@ -1725,22 +1727,22 @@ export default function App() {
       <Authpage
         onAuthenticated={(next, options) => {
           setActiveUser(next);
-          if (options?.isNewAccount) setShowOnboarding(true);
+          if (options?.isNewAccount) setShowTour(true);
         }}
       />
     );
   }
 
-  if (showOnboarding) {
-    return (
-      <Onboarding
-        onFinish={() => {
-          setShowOnboarding(false);
-          switchTab("feed");
-        }}
-      />
-    );
-  }
+  const finishTour = (next?: Tab) => {
+    setShowTour(false);
+    if (next) switchTab(next);
+    // Recorded on the profile so the tour never shows again, on any device
+    supabase
+      .from("profiles")
+      .update({ has_onboarded: true })
+      .eq("id", user.id)
+      .then(({ error }) => { if (error) console.error("Couldn't save has_onboarded", error); });
+  };
 
   return (
     <UsersContext.Provider value={{ currentUser: users[user.id] ?? profileFromAuth(user), users }}>
@@ -1792,6 +1794,7 @@ export default function App() {
         />
       </div>
       <BottomNav active={tab} onChange={switchTab} />
+      {showTour && <Tour onFinish={finishTour} onShowTab={switchTab} />}
     </UsersContext.Provider>
   );
 }
