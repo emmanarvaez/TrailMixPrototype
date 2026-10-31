@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
+import Onboarding from "./components/Onboarding";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import { UsersContext, profileFromAuth } from "./context/UsersContext";
@@ -1694,6 +1695,9 @@ export default function App() {
     Object.fromEntries(Object.values(friends).map((friend) => [friend.id, friend])),
   );
 
+  // Only set by a successful sign-up, so returning users who sign in never see onboarding
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
   const setActiveUser = (next: AuthUser) => {
     setUser(next);
     setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
@@ -1716,7 +1720,27 @@ export default function App() {
     );
   };
 
-  if (!user) return <Authpage onAuthenticated={setActiveUser} />;
+  if (!user) {
+    return (
+      <Authpage
+        onAuthenticated={(next, options) => {
+          setActiveUser(next);
+          if (options?.isNewAccount) setShowOnboarding(true);
+        }}
+      />
+    );
+  }
+
+  if (showOnboarding) {
+    return (
+      <Onboarding
+        onFinish={() => {
+          setShowOnboarding(false);
+          switchTab("feed");
+        }}
+      />
+    );
+  }
 
   return (
     <UsersContext.Provider value={{ currentUser: users[user.id] ?? profileFromAuth(user), users }}>

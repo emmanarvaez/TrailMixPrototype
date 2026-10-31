@@ -9,7 +9,11 @@ export type AuthUser = {
   avatar?: string;
 };
 
-export default function Authpage({ onAuthenticated }: { onAuthenticated: (user: AuthUser) => void }) {
+export default function Authpage({
+  onAuthenticated,
+}: {
+  onAuthenticated: (user: AuthUser, options?: { isNewAccount?: boolean }) => void;
+}) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -62,7 +66,7 @@ export default function Authpage({ onAuthenticated }: { onAuthenticated: (user: 
           email: normalizedEmail,
         });
 
-        onAuthenticated({ id: authUser.id, name: displayName, email: normalizedEmail });
+        onAuthenticated({ id: authUser.id, name: displayName, email: normalizedEmail }, { isNewAccount: true });
       } else {
         const { data, error: signInError } = await supabase.auth.signInWithPassword({
           email: normalizedEmail,
