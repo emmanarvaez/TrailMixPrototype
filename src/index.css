@@ -676,3 +676,8 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .post-detail-screen { padding-top: 4px; }
 .post-missing { padding: 48px 12px; text-align: center; color: var(--muted); }
 
+/* ── Trail search ── */
+.trail-search-note { margin: 4px 2px; color: var(--muted); font-size: 13px; }
+.osm-attribution { margin: 16px 2px 0; color: var(--muted); font-size: 10.5px; }
+.osm-attribution a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+

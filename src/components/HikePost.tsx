@@ -120,9 +120,11 @@ export default function HikePost({
           </span>
         )}
         <div className="post-stats">
-          <span className="post-stat">{trail.distance}</span>
-          <span className="post-stat">↑ {trail.elevation}</span>
-          <span className={`post-stat difficulty-${trail.difficulty.toLowerCase()}`}>{trail.difficulty}</span>
+          {trail.distance && <span className="post-stat">{trail.distance}</span>}
+          {trail.elevation && <span className="post-stat">↑ {trail.elevation}</span>}
+          {trail.difficulty && (
+            <span className={`post-stat difficulty-${trail.difficulty.toLowerCase()}`}>{trail.difficulty}</span>
+          )}
         </div>
       </div>
 
