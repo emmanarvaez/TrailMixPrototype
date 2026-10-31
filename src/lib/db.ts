@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 import { toTrail } from "./trails";
 import { trailPlaceholder } from "./trailArt";
-import type { FeedPost, Friend, HikeLog, Media, PostComment } from "../types";
+import type { AppNotification, FeedPost, Friend, HikeLog, Media, PostComment } from "../types";
 
 // Everything the app reads from or writes to Supabase for the signed-in user.
 
@@ -445,3 +445,70 @@ export async function deleteHikeLog(userId: string, logId: string) {
   const remaining = await fetchMyLogs(userId);
   await saveRanking(remaining, rankingFrom(remaining));
 }
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+// Rows are created and removed by database triggers (see 006_notifications.sql).
+
+type NotificationRow = {
+  id: string;
+  actor_id: string;
+  type: AppNotification["type"];
+  hike_log_id: string | null;
+  comment_id: string | null;
+  read: boolean;
+  created_at: string;
+  hike_logs: { trail_name: string | null; log_photos: { url: string; sort_order: number; media_type: string | null }[] } | null;
+  comments: { body: string } | null;
+};
+
+export async function fetchNotifications(userId: string, limit = 100): Promise<{ notifications: AppNotification[]; profiles: Friend[] }> {
+  const { data, error } = await supabase
+    .from("notifications")
+    .select("id, actor_id, type, hike_log_id, comment_id, read, created_at, hike_logs(trail_name, log_photos(url, sort_order, media_type)), comments(body)")
+    .eq("recipient_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  const notifications = (data as unknown as NotificationRow[]).map((row): AppNotification => {
+    const photo = row.hike_logs?.log_photos ? [...row.hike_logs.log_photos].sort((a, b) => a.sort_order - b.sort_order)[0] : undefined;
+    return {
+      id: row.id,
+      type: row.type,
+      actorId: row.actor_id,
+      logId: row.hike_log_id,
+      commentId: row.comment_id,
+      trailName: row.hike_logs?.trail_name ?? null,
+      thumbnail: photo ? { url: photo.url, type: photo.media_type === "video" ? "video" : "image" } : null,
+      commentText: row.comments?.body ?? null,
+      read: row.read,
+      createdAt: row.created_at,
+    };
+  });
+  return { notifications, profiles: await fetchProfiles(notifications.map((item) => item.actorId)) };
+}
+
+export async function fetchUnreadCount(userId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("recipient_id", userId)
+    .eq("read", false);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function markNotificationsRead(userId: string) {
+  const { error } = await supabase.from("notifications").update({ read: true }).eq("recipient_id", userId).eq("read", false);
+  if (error) throw error;
+}
+
+// Calls onChange whenever one of the user's notifications is added, read or removed.
+// Returns a function that stops listening.
+export function watchNotifications(userId: string, onChange: () => void): () => void {
+  const channel = supabase
+    .channel(`notifications-${userId}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${userId}` }, onChange)
+    .subscribe();
+  return () => { supabase.removeChannel(channel); };
+}
+

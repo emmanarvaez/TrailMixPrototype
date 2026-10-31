@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { usePosts } from "../context/PostsContext";
 import { handle, useUsers } from "../context/UsersContext";
 import type { FeedPost, Friend, Media } from "../types";
@@ -90,8 +90,12 @@ function plural(count: number, word: string) {
   return `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
 }
 
-export default function HikePost({ post }: { post: FeedPost }) {
-  const [showComments, setShowComments] = useState(false);
+export default function HikePost({ post, focusCommentId }: { post: FeedPost; focusCommentId?: string }) {
+  // Opened from a comment notification: start with comments showing and scroll to that one
+  const [showComments, setShowComments] = useState(!!focusCommentId);
+  useEffect(() => {
+    if (focusCommentId) document.getElementById(`comment-${focusCommentId}`)?.scrollIntoView({ block: "center" });
+  }, [focusCommentId]);
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
   const [commentError, setCommentError] = useState("");
@@ -289,7 +293,11 @@ export default function HikePost({ post }: { post: FeedPost }) {
             {post.comments.map((comment) => {
               const author = getUser(comment.authorId);
               return (
-                <div className="post-comment" key={comment.id}>
+                <div
+                  className={`post-comment ${comment.id === focusCommentId ? "focused" : ""}`}
+                  id={`comment-${comment.id}`}
+                  key={comment.id}
+                >
                   <button aria-label={`View ${author.name}'s profile`} className="profile-link" onClick={() => openProfile(author.id)} type="button">
                     <Avatar className="comment-avatar" person={author} />
                   </button>
