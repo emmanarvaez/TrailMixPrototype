@@ -60,3 +60,18 @@ export type HikeLog = {
   rank: number | null; // place on their mountain; null once a newer log of the same trail replaces it
   miles: number;
 };
+
+// One row of the notifications table, with what's needed to show it
+export type AppNotification = {
+  id: string;
+  type: "follow" | "like" | "comment" | "tag" | "reply";
+  actorId: string;
+  logId: string | null;
+  commentId: string | null;
+  trailName: string | null;
+  thumbnail: Media | null; // first photo/video of the hike
+  commentText: string | null;
+  read: boolean;
+  createdAt: string;
+};
+

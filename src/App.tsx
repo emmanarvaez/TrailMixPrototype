@@ -5,6 +5,7 @@ import Feed from "./components/Feed";
 import FindFriends from "./components/FindFriends";
 import HikePost from "./components/HikePost";
 import MountainScene from "./components/MountainScene";
+import Notifications from "./components/Notifications";
 import PickUsername from "./components/PickUsername";
 import Tour from "./components/Tour";
 import Profile from "./components/Profile";
@@ -14,6 +15,10 @@ import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
 import {
   MAX_MEDIA,
   fetchFollowing,
+  fetchNotifications,
+  fetchUnreadCount,
+  markNotificationsRead,
+  watchNotifications,
   fetchMyLogs,
   fetchProfiles,
   fetchRankings,
@@ -25,7 +30,7 @@ import {
 } from "./lib/db";
 import { supabase } from "./lib/supabase";
 import { searchTrails } from "./lib/trails";
-import type { Friend, HikeLog, Trail } from "./types";
+import type { AppNotification, Friend, HikeLog, Trail } from "./types";
 
 const detailOptions = [
   { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
@@ -1833,7 +1838,8 @@ function Accomplishments({
   );
 }
 
-type View = { kind: "profile" | "post"; id: string; scrollY: number };
+// focus: a comment to scroll to when opening a post from a notification
+type View = { kind: "profile" | "post" | "notifications"; id: string; scrollY: number; focus?: string };
 
 const message = (error: unknown) => (error as { message?: string })?.message ?? "Something went wrong.";
 
@@ -1979,6 +1985,65 @@ export default function App() {
   };
   const openPost = (id: string) => pushView({ kind: "post", id });
 
+  // Notifications: badge count, the list, and live updates from Supabase Realtime
+  const [notifications, setNotifications] = useState<AppNotification[] | null>(null);
+  const [notificationsError, setNotificationsError] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
+  const notificationsOpen = view?.kind === "notifications";
+  const notificationsOpenRef = useRef(false);
+  notificationsOpenRef.current = notificationsOpen;
+
+  const refreshUnread = useCallback(() => {
+    if (!userId) return;
+    fetchUnreadCount(userId).then(setUnreadCount).catch((error) => console.error("Couldn't load unread count", error));
+  }, [userId]);
+
+  // Loads the list, then marks everything read. The rows keep their unread highlight for this visit.
+  const loadNotifications = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const { notifications: found, profiles } = await fetchNotifications(userId);
+      addProfiles(profiles);
+      setNotifications(found);
+      setNotificationsError("");
+      if (found.some((item) => !item.read)) await markNotificationsRead(userId);
+      setUnreadCount(0);
+    } catch (error) {
+      setNotificationsError(message(error));
+    }
+  }, [userId, addProfiles]);
+
+  useEffect(() => {
+    if (!userId) return;
+    refreshUnread();
+    return watchNotifications(userId, () => {
+      if (notificationsOpenRef.current) loadNotifications();
+      else refreshUnread();
+    });
+  }, [userId, refreshUnread, loadNotifications]);
+
+  // Also refresh the badge whenever the feed is shown, in case a realtime update was missed
+  useEffect(() => {
+    if (tab === "feed" && !view) refreshUnread();
+  }, [tab, view, refreshUnread]);
+
+  const openNotifications = () => {
+    setUnreadCount(0);
+    pushView({ kind: "notifications", id: "activity" });
+    loadNotifications();
+  };
+
+  // A post from a notification may not be loaded yet (for example, someone else's hike you were tagged in)
+  const openPostFromNotification = (logId: string, commentId?: string) => {
+    const scrollY = window.scrollY;
+    loadPosts({ logIds: [logId] })
+      .catch((error) => console.error("Couldn't load post", error))
+      .finally(() => {
+        setViews((current) => [...current, { kind: "post", id: logId, focus: commentId, scrollY }]);
+        window.scrollTo({ top: 0 });
+      });
+  };
+
   const setActiveUser = (next: AuthUser) => {
     setUser(next);
     setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
@@ -2012,6 +2077,8 @@ export default function App() {
     setUnlockedKeys([]);
     setFeedIds(null);
     setOtherRankings({});
+    setNotifications(null);
+    setUnreadCount(0);
     requestedRankings.current.clear();
     resetPosts();
   };
@@ -2074,11 +2141,23 @@ export default function App() {
           />
         </Shell>
       )}
+      {view?.kind === "notifications" && (
+        <Shell onBack={goBack}>
+          <Notifications
+            following={following}
+            loadError={notificationsError}
+            notifications={notifications}
+            onOpenPost={openPostFromNotification}
+            onOpenProfile={openProfile}
+            onToggleFollow={toggleFollow}
+          />
+        </Shell>
+      )}
       {view?.kind === "post" && (
         <Shell onBack={goBack}>
           <section className="screen-content post-detail-screen">
             {postsValue.posts[view.id] ? (
-              <HikePost post={postsValue.posts[view.id]} />
+              <HikePost focusCommentId={view.focus} key={`${view.id}-${view.focus ?? ""}`} post={postsValue.posts[view.id]} />
             ) : (
               <p className="post-missing">This hike isn't available anymore.</p>
             )}
@@ -2088,7 +2167,22 @@ export default function App() {
       {/* The current tab stays mounted under an opened profile or post, so its state survives Back */}
       <div hidden={!!view}>
       {tab === "feed" && (
-        <Shell>
+        <Shell
+          headerAction={
+            <button
+              aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
+              className="header-back header-bell"
+              onClick={openNotifications}
+              type="button"
+            >
+              <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M6 9.5a6 6 0 0 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15.5 6 9.5Z" />
+                <path d="M10.3 20.5a1.9 1.9 0 0 0 3.4 0" />
+              </svg>
+              {unreadCount > 0 && <span className="bell-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}
+            </button>
+          }
+        >
           <Feed loadError={feedError} onFindFriends={() => setShowFindFriends(true)} posts={feedPosts} />
         </Shell>
       )}
