@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import type { AuthUser } from "../components/Authpage";
-import { colorFor, usernameFromEmail } from "../lib/db";
+import { colorFor } from "../lib/db";
 import type { Friend } from "../types";
 
 // The signed-in account as a public profile, the same shape used for friends,
@@ -9,11 +9,14 @@ export function profileFromAuth(user: AuthUser): Friend {
   return {
     id: user.id,
     name: user.name,
-    username: usernameFromEmail(user.email),
+    username: user.username ?? "",
     color: colorFor(user.id),
     avatar: user.avatar,
   };
 }
+
+// "@username" for display, or "" for an account that hasn't picked one yet. Never the email.
+export const handle = (person: Friend) => (person.username ? `@${person.username}` : "");
 
 type UsersContextValue = {
   /** The signed-in user's profile; new comments are written as this user. */
@@ -32,7 +35,7 @@ export function useUsers() {
   const value = useContext(UsersContext);
   if (!value) throw new Error("useUsers must be used inside UsersContext");
   const getUser = (id: string): Friend =>
-    value.users[id] ?? { id, name: "TrailMix hiker", username: "hiker", color: colorFor(id) };
+    value.users[id] ?? { id, name: "TrailMix hiker", username: "", color: colorFor(id) };
   // Where a user placed a trail on their own mountain (1 = summit), or null if it isn't ranked
   const getRank = (userId: string, trailName: string): number | null => {
     const index = value.rankings[userId]?.indexOf(trailName) ?? -1;

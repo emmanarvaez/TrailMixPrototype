@@ -10,7 +10,8 @@ export const MAX_MEDIA = 20;
 
 // ─── Profiles ────────────────────────────────────────────────────────────────
 
-type ProfileRow = { id: string; name: string; email: string; avatar_url: string | null };
+// Only public columns: emails and phone numbers are never readable for other users
+type ProfileRow = { id: string; name: string; username: string | null; avatar_url: string | null };
 
 const AVATAR_COLORS = ["#244f3b", "#c2571f", "#6d8b68", "#d5a23e", "#7a4e2a", "#e66a3c", "#4b806b", "#71819a"];
 
@@ -21,19 +22,48 @@ export function colorFor(id: string) {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
-export const usernameFromEmail = (email: string) => email.split("@")[0].toLowerCase();
+// ─── Usernames ───────────────────────────────────────────────────────────────
+
+export const USERNAME_RULES = "3–20 characters: lowercase letters, numbers, _ and .";
+
+// What's wrong with a username, or null if its format is fine
+export function usernameProblem(username: string): string | null {
+  if (username.length < 3) return "Usernames need at least 3 characters.";
+  if (username.length > 20) return "Usernames can be at most 20 characters.";
+  if (!/^[a-z0-9_.]+$/.test(username)) return "Use only lowercase letters, numbers, _ and .";
+  return null;
+}
+
+// True if nobody else has it (case-insensitive). Works before signing in, for the sign-up form.
+export async function usernameAvailable(username: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("username_available", { candidate: username });
+  if (error) throw error;
+  return data === true;
+}
+
+export async function setUsername(userId: string, username: string) {
+  const { error } = await supabase.from("profiles").update({ username }).eq("id", userId);
+  if (error) throw error.code === "23505" ? new Error("That username was just taken. Try another.") : error;
+}
+
+// The signed-in user's own profile, including the private fields only they can see
+export async function fetchMyProfile(): Promise<{ name: string; username: string | null; avatar_url: string | null; phone: string | null } | null> {
+  const { data, error } = await supabase.rpc("get_my_profile");
+  if (error) throw error;
+  return (data as { name: string; username: string | null; avatar_url: string | null; phone: string | null }[])[0] ?? null;
+}
 
 export function toFriend(row: ProfileRow): Friend {
   return {
     id: row.id,
     name: row.name,
-    username: usernameFromEmail(row.email),
+    username: row.username ?? "",
     color: colorFor(row.id),
     avatar: row.avatar_url ?? undefined,
   };
 }
 
-const PROFILE_COLUMNS = "id, name, email, avatar_url";
+const PROFILE_COLUMNS = "id, name, username, avatar_url";
 
 export async function fetchProfiles(ids: string[]): Promise<Friend[]> {
   const unique = [...new Set(ids)];
@@ -43,15 +73,15 @@ export async function fetchProfiles(ids: string[]): Promise<Friend[]> {
   return (data as ProfileRow[]).map(toFriend);
 }
 
-// People to add as friends, matched on name or email
+// People matching a username or display name (never email). A leading @ is ignored.
 export async function searchProfiles(query: string, excludeId: string): Promise<Friend[]> {
-  // Commas and brackets would break the "or" filter, so they're dropped from the search text
-  const text = query.trim().replace(/[,()%_\\]/g, " ").trim();
+  // Characters that would break the "or" filter or act as wildcards are dropped from the search text
+  const text = query.trim().replace(/^@+/, "").replace(/[,()%*\\]/g, " ").trim();
   if (!text) return [];
   const { data, error } = await supabase
     .from("profiles")
     .select(PROFILE_COLUMNS)
-    .or(`name.ilike.%${text}%,email.ilike.%${text}%`)
+    .or(`username.ilike.*${text}*,name.ilike.*${text}*`)
     .neq("id", excludeId)
     .order("name")
     .limit(20);
@@ -86,6 +116,13 @@ export async function fetchFollowing(userId: string): Promise<string[]> {
   const { data, error } = await supabase.from("friendships").select("friend_id").eq("user_id", userId);
   if (error) throw error;
   return data.map((row) => row.friend_id as string);
+}
+
+// Who follows this user
+export async function fetchFollowers(userId: string): Promise<string[]> {
+  const { data, error } = await supabase.from("friendships").select("user_id").eq("friend_id", userId);
+  if (error) throw error;
+  return data.map((row) => row.user_id as string);
 }
 
 export async function setFollowing(userId: string, friendId: string, follow: boolean) {
@@ -133,7 +170,8 @@ export async function fetchPosts(
 
   const [{ data: saved, error: savedError }, profiles] = await Promise.all([
     supabase.from("saved_logs").select("log_id").eq("user_id", viewerId).in("log_id", rows.map((row) => row.id)),
-    fetchProfiles(rows.flatMap((row) => [row.user_id, ...row.comments.map((comment) => comment.user_id)])),
+    // Authors, commenters and tagged people, so every @username on the post can be shown
+    fetchProfiles(rows.flatMap((row) => [row.user_id, ...row.comments.map((comment) => comment.user_id), ...row.log_tags.map((tag) => tag.tag)])),
   ]);
   if (savedError) throw savedError;
   const savedIds = new Set((saved ?? []).map((row) => row.log_id as string));

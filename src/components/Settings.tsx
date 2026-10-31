@@ -1,7 +1,8 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { AuthUser } from "./Authpage";
-import { colorFor, updateProfile, uploadAvatar } from "../lib/db";
+import { colorFor, setUsername, updateProfile, uploadAvatar } from "../lib/db";
 import { supabase } from "../lib/supabase";
+import UsernameField, { useUsernameCheck } from "./UsernameField";
 
 type Field = "email" | "phone" | "password";
 
@@ -25,7 +26,11 @@ export default function Settings({
   const [value, setValue] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<Field | "photo" | null>(null);
+  const [saved, setSaved] = useState<Field | "photo" | "username" | null>(null);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const usernameStatus = useUsernameCheck(newUsername, user.username);
   const [savedMessage, setSavedMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [photoError, setPhotoError] = useState("");
@@ -84,6 +89,25 @@ export default function Settings({
     }
   };
 
+  const saveUsername = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (usernameStatus === "unchanged") return setEditingUsername(false);
+    if (usernameStatus !== "available") {
+      return setUsernameError(usernameStatus === "checking" ? "Still checking that username. One sec!" : "Pick an available username.");
+    }
+    setSaving(true);
+    try {
+      await setUsername(user.id, newUsername);
+      onUpdateUser({ username: newUsername });
+      setEditingUsername(false);
+      setSaved("username");
+    } catch (saveError) {
+      setUsernameError((saveError as { message?: string })?.message ?? "Couldn't save that. Try again?");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const changePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -115,6 +139,29 @@ export default function Settings({
       </div>
 
       <div className="settings-list">
+        <div className="settings-field">
+          <span className="settings-label">Change Username</span>
+          {editingUsername ? (
+            <form className="settings-form" noValidate onSubmit={saveUsername}>
+              <UsernameField autoFocus label="New username" onChange={(next) => { setNewUsername(next); setUsernameError(""); }} status={usernameStatus} value={newUsername} />
+              {usernameError && <p className="settings-error" role="alert">{usernameError}</p>}
+              <div className="settings-form-actions">
+                <button className="settings-cancel" onClick={() => setEditingUsername(false)} type="button">Cancel</button>
+                <button className="settings-save" disabled={saving} type="submit">{saving ? "Saving…" : "Save"}</button>
+              </div>
+            </form>
+          ) : (
+            <button
+              className="settings-bar"
+              onClick={() => { setEditingUsername(true); setNewUsername(user.username ?? ""); setUsernameError(""); setSaved(null); }}
+              type="button"
+            >
+              <span className="settings-current">{user.username ? `@${user.username}` : "No username yet"}</span>
+              <span aria-hidden="true" className="settings-chevron">›</span>
+            </button>
+          )}
+          {saved === "username" && <p className="settings-saved">Username updated</p>}
+        </div>
         {(Object.keys(fieldLabels) as Field[]).map((field) => (
           <div className="settings-field" key={field}>
             <span className="settings-label">{fieldLabels[field]}</span>

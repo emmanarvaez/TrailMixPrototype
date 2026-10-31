@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import MountainScene from "./MountainScene";
+import PeopleList from "./PeopleList";
 import { usePosts } from "../context/PostsContext";
-import { fetchSavedLogIds, fetchTaggedLogIds } from "../lib/db";
+import { handle } from "../context/UsersContext";
+import { fetchFollowers, fetchFollowing, fetchProfiles, fetchSavedLogIds, fetchTaggedLogIds } from "../lib/db";
 import type { FeedPost, Friend } from "../types";
 
-type ProfileTab = "posts" | "mountain" | "saved" | "tagged" | "friends";
+type ProfileTab = "posts" | "mountain" | "saved" | "tagged" | "followers" | "following";
 
-// Saved hikes are private, so they only appear on your own profile. The friends list
-// isn't a tab: it opens from the Friends count under your profile picture.
+// Saved hikes are private, so they only appear on your own profile. Followers and
+// following aren't tabs: they open from the counts under the profile picture.
 const OWN_TABS: ProfileTab[] = ["posts", "mountain", "saved", "tagged"];
 const OTHER_TABS: ProfileTab[] = ["posts", "mountain", "tagged"];
 
@@ -15,7 +17,7 @@ export default function Profile({
   profile,
   isOwn,
   ranking,
-  friends,
+  currentUserId,
   following,
   onOpenPost,
   onOpenProfile,
@@ -26,7 +28,7 @@ export default function Profile({
   profile: Friend; // whose profile this is
   isOwn: boolean; // true when it's the signed-in user's own profile
   ranking: string[]; // this user's mountain, #1 first
-  friends: Friend[]; // people the signed-in user follows (shown on their own profile)
+  currentUserId: string;
   following: string[]; // IDs the signed-in user follows
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
@@ -41,9 +43,33 @@ export default function Profile({
   const [taggedIds, setTaggedIds] = useState<string[] | null>(null);
   const [savedIds, setSavedIds] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState("");
+  // This profile's followers and the people it follows (IDs), plus their profiles once a list is opened
+  const [followerIds, setFollowerIds] = useState<string[] | null>(null);
+  const [followingIds, setFollowingIds] = useState<string[] | null>(null);
+  const [people, setPeople] = useState<Friend[] | null>(null);
   const firstName = profile.name.split(" ")[0];
   const isFriend = following.includes(profile.id);
   const tabs = isOwn ? OWN_TABS : OTHER_TABS;
+  const showingPeople = activeTab === "followers" || activeTab === "following";
+  const peopleIds = activeTab === "followers" ? followerIds : followingIds;
+
+  // Reloaded when the signed-in user follows or unfollows someone, so counts stay right
+  useEffect(() => {
+    Promise.all([fetchFollowers(profile.id), fetchFollowing(profile.id)])
+      .then(([followers, followed]) => {
+        setFollowerIds(followers);
+        setFollowingIds(followed);
+      })
+      .catch((error) => setLoadError(error?.message ?? "Something went wrong."));
+  }, [profile.id, following]);
+
+  useEffect(() => {
+    if (!showingPeople || peopleIds === null) return;
+    setPeople(null);
+    fetchProfiles(peopleIds)
+      .then((found) => setPeople(peopleIds.map((id) => found.find((person) => person.id === id)).filter((person): person is Friend => !!person)))
+      .catch((error) => setLoadError(error?.message ?? "Something went wrong."));
+  }, [showingPeople, peopleIds]);
 
   useEffect(() => {
     const fail = (error: { message?: string }) => setLoadError(error?.message ?? "Something went wrong.");
@@ -89,7 +115,7 @@ export default function Profile({
           <div>
             <span className="eyebrow">TrailMix hiker</span>
             <h1>{profile.name}</h1>
-            <p>@{profile.username}</p>
+            {handle(profile) && <p>{handle(profile)}</p>}
           </div>
         </div>
         {isOwn ? (
@@ -105,7 +131,7 @@ export default function Profile({
             type="button"
           >
             <span aria-hidden="true">{isFriend ? "✓" : "+"}</span>
-            <span>{isFriend ? "Following" : "Add friend"}</span>
+            <span>{isFriend ? "Following" : "Follow"}</span>
           </button>
         )}
       </header>
@@ -113,19 +139,18 @@ export default function Profile({
       {/* Counts always show a number: 0 while loading or when there's nothing yet */}
       <div aria-label="Profile stats" className="profile-stats">
         <div><b>{ownIds?.length ?? 0}</b><span>Posts</span></div>
-        <div><b>{taggedIds?.length ?? 0}</b><span>Tagged</span></div>
-        {isOwn ? (
+        {(["followers", "following"] as const).map((list) => (
           <button
-            aria-pressed={activeTab === "friends"}
-            className={activeTab === "friends" ? "selected" : ""}
-            onClick={() => setActiveTab(activeTab === "friends" ? "posts" : "friends")}
+            aria-pressed={activeTab === list}
+            className={activeTab === list ? "selected" : ""}
+            key={list}
+            onClick={() => setActiveTab(activeTab === list ? "posts" : list)}
             type="button"
           >
-            <b>{friends.length}</b><span>Friends</span>
+            <b>{(list === "followers" ? followerIds : followingIds)?.length ?? 0}</b>
+            <span>{list === "followers" ? "Followers" : "Following"}</span>
           </button>
-        ) : (
-          <div><b>{ranking.length}</b><span>Ranked</span></div>
-        )}
+        ))}
       </div>
 
       <div
@@ -150,27 +175,36 @@ export default function Profile({
 
       {loadError && <p className="trail-search-note" role="alert">Couldn't load this profile: {loadError}</p>}
 
-      {activeTab === "friends" ? (
-        <section aria-label="Friends" className="profile-friends">
+      {showingPeople ? (
+        <section aria-label={activeTab === "followers" ? "Followers" : "Following"} className="profile-friends">
           <div className="profile-section-heading">
-            <div><span className="eyebrow">Your trail crew</span><h2>Friends</h2></div>
-            <span>{friends.length}</span>
-          </div>
-          {friends.length > 0 ? friends.map((friend) => (
-            <div className="profile-friend-row" key={friend.id}>
-              <button className="profile-link profile-friend-person" onClick={() => onOpenProfile(friend.id)} type="button">
-                <span className="profile-friend-avatar" style={{ background: friend.color }}>
-                  {friend.avatar ? <img alt="" src={friend.avatar} /> : friend.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="profile-friend-copy"><b>{friend.name}</b><small>@{friend.username}</small></span>
-              </button>
-              <button aria-label={`Remove ${friend.name}`} onClick={() => onToggleFollow(friend)} type="button">Following</button>
+            <div>
+              <span className="eyebrow">{isOwn ? "Your trail crew" : `${firstName}'s trail crew`}</span>
+              <h2>{activeTab === "followers" ? "Followers" : "Following"}</h2>
             </div>
-          )) : (
+            <span>{peopleIds?.length ?? 0}</span>
+          </div>
+          {people === null ? (
+            <p className="trail-search-note">Loading…</p>
+          ) : people.length > 0 ? (
+            <PeopleList
+              currentUserId={currentUserId}
+              following={following}
+              onOpenProfile={onOpenProfile}
+              onToggleFollow={onToggleFollow}
+              people={people}
+            />
+          ) : (
             <div className="profile-empty">
-              <h2>Your crew starts here</h2>
-              <p>Add a friend to see their trail stories.</p>
-              <button className="profile-empty-action" onClick={onFindFriends} type="button">Find friends</button>
+              <h2>{activeTab === "followers" ? "No followers yet" : "Not following anyone yet"}</h2>
+              <p>
+                {activeTab === "followers"
+                  ? isOwn ? "When people follow you, they'll show up here." : `When people follow ${firstName}, they'll show up here.`
+                  : isOwn ? "Follow friends to see their trail stories." : `${firstName} isn't following anyone yet.`}
+              </p>
+              {isOwn && activeTab === "following" && (
+                <button className="profile-empty-action" onClick={onFindFriends} type="button">Find friends</button>
+              )}
             </div>
           )}
         </section>
