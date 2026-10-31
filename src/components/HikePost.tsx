@@ -34,6 +34,21 @@ function Avatar({ person, className }: { person: Friend; className: string }) {
   );
 }
 
+// Like, comment and save handlers for a post, shared by every screen that shows full posts
+export function postActions(post: FeedPost, onUpdatePost: (id: string, update: (post: FeedPost) => FeedPost) => void) {
+  return {
+    onAddComment: (comment: PostComment) =>
+      onUpdatePost(post.id, (current) => ({ ...current, comments: [...current.comments, comment] })),
+    onToggleLike: () =>
+      onUpdatePost(post.id, (current) => ({
+        ...current,
+        liked: !current.liked,
+        likes: current.likes + (current.liked ? -1 : 1),
+      })),
+    onToggleSave: () => onUpdatePost(post.id, (current) => ({ ...current, saved: !current.saved })),
+  };
+}
+
 function formatDate(date: string) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
@@ -56,7 +71,7 @@ export default function HikePost({
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
-  const { currentUser, getUser } = useUsers();
+  const { currentUser, getUser, openProfile } = useUsers();
   const { friend, trail } = post;
 
   const submitComment = (event: FormEvent) => {
@@ -76,12 +91,14 @@ export default function HikePost({
   return (
     <article className="hike-post">
       <header className="post-header">
-        <Avatar className="post-avatar" person={friend} />
+        <button aria-label={`View ${friend.name}'s profile`} className="profile-link" onClick={() => openProfile(friend.id)} type="button">
+          <Avatar className="post-avatar" person={friend} />
+        </button>
         <div className="post-author">
-          <span className="post-author-line">
+          <button className="post-author-line profile-link" onClick={() => openProfile(friend.id)} type="button">
             <b>{friend.name}</b>
             <small>@{friend.username}</small>
-          </span>
+          </button>
           <span className="post-trail">hiked <strong>{trail.name}</strong></span>
         </div>
         <time className="post-date" dateTime={post.date}>{formatDate(post.date)}</time>
@@ -139,7 +156,9 @@ export default function HikePost({
           </button>
         </div>
         <p className="post-caption">
-          <b>{friend.username}</b>
+          <button className="profile-link" onClick={() => openProfile(friend.id)} type="button">
+            <b>{friend.username}</b>
+          </button>
           {post.caption}
         </p>
 
@@ -149,9 +168,13 @@ export default function HikePost({
               const author = getUser(comment.authorId);
               return (
                 <div className="post-comment" key={comment.id}>
-                  <Avatar className="comment-avatar" person={author} />
+                  <button aria-label={`View ${author.name}'s profile`} className="profile-link" onClick={() => openProfile(author.id)} type="button">
+                    <Avatar className="comment-avatar" person={author} />
+                  </button>
                   <p>
-                    <b>{author.name}</b>
+                    <button className="profile-link" onClick={() => openProfile(author.id)} type="button">
+                      <b>{author.name}</b>
+                    </button>
                     <small>@{author.username}</small>
                     {comment.text}
                   </p>

@@ -40,6 +40,15 @@ export const friends: Record<string, Friend> = {
   emma: { id: "mock-emma", name: "Emma", username: "emma.wanders", color: "#7a4e2a" },
 };
 
+// Each mock user's personal mountain, #1 first, keyed by user ID
+export const mockRankings: Record<string, string[]> = {
+  [friends.caine.id]: ["Top of the World", "Crystal Cove Moro Ridge", "Holy Jim Falls", "Bommer Canyon Loop", "Peters Canyon Loop", "Black Star Canyon"],
+  [friends.kaylee.id]: ["Holy Jim Falls", "Black Star Canyon", "Top of the World", "Laguna Coast Loop", "Bommer Canyon Loop"],
+  [friends.oscar.id]: ["Crystal Cove Moro Ridge", "Red Rock Canyon", "Santiago Oaks", "Top of the World", "Holy Jim Falls", "Moro Canyon Trail", "Quail Hill Trail"],
+  [friends.amanda.id]: ["Bommer Canyon Loop", "Quail Hill Trail", "Top of the World", "Buck Gully Trail"],
+  [friends.emma.id]: ["Top of the World", "Bommer Canyon Loop", "Peters Canyon Loop"],
+};
+
 export const initialFeedPosts: FeedPost[] = [
   {
     id: "post-1",
@@ -108,5 +117,65 @@ export const initialFeedPosts: FeedPost[] = [
     liked: false,
     saved: false,
     comments: [{ id: "c-6", authorId: friends.caine.id, text: "Welcome back!! 🙌" }],
+  },
+  {
+    id: "post-6",
+    friend: friends.caine,
+    trail: findTrail("Crystal Cove Moro Ridge"),
+    image: trailPhotos[3],
+    caption: "Ridge run with the fog rolling in. Couldn't see the ocean but the vibes were immaculate.",
+    date: "2026-09-27",
+    likes: 33,
+    liked: false,
+    saved: false,
+    comments: [],
+  },
+  {
+    id: "post-7",
+    friend: friends.kaylee,
+    trail: findTrail("Top of the World"),
+    image: trailPhotos[1],
+    caption: "Quick after-work climb. Laguna was glowing.",
+    date: "2026-09-21",
+    likes: 29,
+    liked: false,
+    saved: false,
+    comments: [{ id: "c-7", authorId: friends.amanda.id, text: "Take me next time!!" }],
+  },
+  {
+    id: "post-8",
+    friend: friends.oscar,
+    trail: findTrail("Holy Jim Falls"),
+    image: trailPhotos[2],
+    caption: "Creek crossings: 9. Dry socks: 0.",
+    date: "2026-09-14",
+    likes: 40,
+    liked: false,
+    saved: false,
+    comments: [],
+  },
+  {
+    id: "post-9",
+    friend: friends.amanda,
+    trail: findTrail("Top of the World"),
+    image: trailPhotos[1],
+    caption: "Brought the whole crew up for sunset. Worth the switchbacks.",
+    date: "2026-09-10",
+    likes: 46,
+    liked: false,
+    saved: false,
+    comments: [],
+  },
+  {
+    id: "post-10",
+    friend: friends.emma,
+    trail: findTrail("Bommer Canyon Loop"),
+    image: trailPhotos[0],
+    caption: "Shady and easy, exactly what I needed today.",
+    date: "2026-09-06",
+    likes: 22,
+    liked: false,
+    saved: false,
+    comments: [],
   },
 ];

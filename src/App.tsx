@@ -1,13 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
+import HikePost, { postActions } from "./components/HikePost";
+import MountainScene from "./components/MountainScene";
 import Tour from "./components/Tour";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import { UsersContext, profileFromAuth } from "./context/UsersContext";
 import { supabase } from "./lib/supabase";
-import { friends, initialFeedPosts, type FeedPost, type Friend } from "./data/feedPosts";
+import { friends, initialFeedPosts, mockRankings, type FeedPost, type Friend } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
 
 const detailOptions = [
@@ -1433,26 +1435,7 @@ function AccomplishmentsMountain({
 
   return (
     <div>
-      <div className="mountain-scene">
-        <div className="sun-disc" />
-        <div className="cloud cloud-one" />
-        <div className="cloud cloud-two" />
-        <svg aria-hidden="true" className="mountains" preserveAspectRatio="none" viewBox="0 0 390 430">
-          <path className="mountain-back" d="M-20 340 90 115l58 101 57-142 205 266Z" />
-          <path className="mountain-front" d="M-15 410 105 212l67 83 61-113 170 228Z" />
-          <path className="snow" d="m205 74 57 72-34-13-20 26-28-25-32 19Z" />
-          <path className="ridge" d="m22 382 87-167 65 81 61-113 145 201" />
-        </svg>
-        <div className="rank-list">
-          {ranking.slice(0, 4).map((name, index) => (
-            <div className={`rank-item rank-${index + 1}`} key={name}>
-              <span className="rank-number">#{index + 1}</span>
-              <span className="rank-name">{name}</span>
-            </div>
-          ))}
-        </div>
-        <img alt="" className="figma-mountain-guide" src="/assets/2cec3.svg" />
-      </div>
+      <MountainScene ranking={ranking} />
       <div className="accom-rank-list-section">
         {ranking.map((name, index) => {
           const hike = hikeDetails[name];
@@ -1491,13 +1474,16 @@ function AccomplishmentsMountain({
   );
 }
 
-function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
+function Accomplishments({
+  onLogHike,
+  accomRanking,
+  setAccomRanking,
+}: {
+  onLogHike: () => void;
+  accomRanking: string[];
+  setAccomRanking: (ranking: string[]) => void;
+}) {
   const [subTab, setSubTab] = useState<"mountain" | "trailmix">("mountain");
-  const [accomRanking, setAccomRanking] = useState([
-    "Holy Jim Falls", "Bommer Canyon Loop", "Top of the World", "Crystal Cove Moro Ridge",
-    "Peters Canyon Loop", "Quail Hill Trail", "Black Star Canyon", "Buck Gully Trail",
-    "Laguna Coast Loop", "Santiago Oaks", "Moro Canyon Trail", "Red Rock Canyon",
-  ]);
   const [selectedHike, setSelectedHike] = useState<string | null>(null);
   const [selectedIngredient, setSelectedIngredient] = useState<number | null>(null);
 
@@ -1685,6 +1671,8 @@ function Accomplishments({ onLogHike }: { onLogHike: () => void }) {
   );
 }
 
+type View = { kind: "profile" | "post"; id: string; scrollY: number };
+
 export default function App() {
   document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
@@ -1705,12 +1693,50 @@ export default function App() {
     setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
   };
   const [friendUsernames, setFriendUsernames] = useState(() => Object.values(friends).map((friend) => friend.username));
+  // The signed-in user's mountain, shared by Accomplishments (where it's re-ranked) and their profile
+  const [myRanking, setMyRanking] = useState([
+    "Holy Jim Falls", "Bommer Canyon Loop", "Top of the World", "Crystal Cove Moro Ridge",
+    "Peters Canyon Loop", "Quail Hill Trail", "Black Star Canyon", "Buck Gully Trail",
+    "Laguna Coast Loop", "Santiago Oaks", "Moro Canyon Trail", "Red Rock Canyon",
+  ]);
+  // Screens opened on top of the current tab (someone's profile, a single post), newest last.
+  // Each remembers the scroll position underneath it so Back returns to the same spot.
+  const [views, setViews] = useState<View[]>([]);
+  const view = views[views.length - 1];
+  const restoreScroll = useRef<number | null>(null);
+
+  // After Back re-shows the screen underneath, put it back where the user left it
+  useLayoutEffect(() => {
+    if (restoreScroll.current === null) return;
+    window.scrollTo({ top: restoreScroll.current });
+    restoreScroll.current = null;
+  }, [views]);
 
   const switchTab = (next: Tab) => {
     setTab(next);
     setShowSettings(false);
+    setViews([]);
     window.scrollTo({ top: 0 });
   };
+
+  const pushView = (next: Omit<View, "scrollY">) => {
+    if (view && view.kind === next.kind && view.id === next.id) return;
+    const scrollY = window.scrollY; // read now: the updater below runs after the scroll to top
+    setViews((current) => [...current, { ...next, scrollY }]);
+    window.scrollTo({ top: 0 });
+  };
+
+  const goBack = () => {
+    restoreScroll.current = view?.scrollY ?? 0;
+    setViews((current) => current.slice(0, -1));
+  };
+
+  // Your own avatar or name takes you to your Profile tab; anyone else's opens their profile
+  const openProfile = (id: string) => {
+    if (id === user?.id) switchTab("profile");
+    else pushView({ kind: "profile", id });
+  };
+  const openPost = (id: string) => pushView({ kind: "post", id });
 
   const updatePost = (id: string, update: (post: FeedPost) => FeedPost) => {
     setPosts((current) => current.map((post) => (post.id === id ? update(post) : post)));
@@ -1745,7 +1771,39 @@ export default function App() {
   };
 
   return (
-    <UsersContext.Provider value={{ currentUser: users[user.id] ?? profileFromAuth(user), users }}>
+    <UsersContext.Provider value={{ currentUser: users[user.id] ?? profileFromAuth(user), users, openProfile }}>
+      {view?.kind === "profile" && (
+        <Shell onBack={goBack}>
+          <Profile
+            friendUsernames={friendUsernames}
+            isOwn={false}
+            key={view.id}
+            onLogHike={() => switchTab("log")}
+            onOpenPost={openPost}
+            onSignOut={() => {}}
+            onToggleFriend={toggleFriend}
+            posts={posts}
+            profile={users[view.id] ?? { id: view.id, name: "TrailMix hiker", username: "hiker", color: "#9ba196" }}
+            ranking={mockRankings[view.id] ?? []}
+          />
+        </Shell>
+      )}
+      {view?.kind === "post" && (
+        <Shell onBack={goBack}>
+          <section className="screen-content post-detail-screen">
+            {(() => {
+              const post = posts.find((item) => item.id === view.id);
+              return post ? (
+                <HikePost post={post} {...postActions(post, updatePost)} />
+              ) : (
+                <p className="post-missing">This hike isn't available anymore.</p>
+              );
+            })()}
+          </section>
+        </Shell>
+      )}
+      {/* The current tab stays mounted under an opened profile or post, so its state survives Back */}
+      <div hidden={!!view}>
       {tab === "feed" && (
         <Shell>
           <Feed onUpdatePost={updatePost} posts={posts} />
@@ -1753,7 +1811,7 @@ export default function App() {
       )}
       {tab === "accomplishments" && (
         <Shell>
-          <Accomplishments onLogHike={() => switchTab("log")} />
+          <Accomplishments accomRanking={myRanking} onLogHike={() => switchTab("log")} setAccomRanking={setMyRanking} />
         </Shell>
       )}
       {tab === "profile" && showSettings && (
@@ -1773,16 +1831,19 @@ export default function App() {
           }
         >
           <Profile
-            onLogHike={() => switchTab("log")}
-            onSignOut={() => { setUser(null); setTab("feed"); setShowSettings(false); }}
-            onToggleFriend={toggleFriend}
-            onUpdatePost={updatePost}
-            posts={posts}
             friendUsernames={friendUsernames}
-            user={user}
+            isOwn
+            onLogHike={() => switchTab("log")}
+            onOpenPost={openPost}
+            onSignOut={() => { setUser(null); setTab("feed"); setShowSettings(false); setViews([]); }}
+            onToggleFriend={toggleFriend}
+            posts={posts}
+            profile={users[user.id] ?? profileFromAuth(user)}
+            ranking={myRanking}
           />
         </Shell>
       )}
+      </div>
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
       <div hidden={tab !== "log"}>
         <LogHikeFlow

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import HikePost from "./HikePost";
+import HikePost, { postActions } from "./HikePost";
 import type { FeedPost } from "../data/feedPosts";
 
 export default function Feed({
@@ -40,21 +40,7 @@ export default function Feed({
       {visiblePosts.length > 0 ? (
         <div className="feed-list">
           {visiblePosts.map((post) => (
-            <HikePost
-              key={post.id}
-              onAddComment={(comment) =>
-                onUpdatePost(post.id, (current) => ({ ...current, comments: [...current.comments, comment] }))
-              }
-              onToggleLike={() =>
-                onUpdatePost(post.id, (current) => ({
-                  ...current,
-                  liked: !current.liked,
-                  likes: current.likes + (current.liked ? -1 : 1),
-                }))
-              }
-              onToggleSave={() => onUpdatePost(post.id, (current) => ({ ...current, saved: !current.saved }))}
-              post={post}
-            />
+            <HikePost key={post.id} post={post} {...postActions(post, onUpdatePost)} />
           ))}
         </div>
       ) : (

@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import HikePost from "./HikePost";
+import MountainScene from "./MountainScene";
 import { friends, type FeedPost, type Friend } from "../data/feedPosts";
-import type { AuthUser } from "./Authpage";
-import { usernameFor } from "../context/UsersContext";
 
 const suggestions: Friend[] = [
   { id: "mock-maya", name: "Maya Chen", username: "mayatreks", color: "#4b806b" },
@@ -10,20 +8,28 @@ const suggestions: Friend[] = [
   { id: "mock-nina", name: "Nina Brooks", username: "ninabrooks", color: "#71819a" },
 ];
 
-type ProfileTab = "posts" | "saved" | "tagged" | "friends";
+type ProfileTab = "posts" | "mountain" | "saved" | "tagged" | "friends";
+
+// Saved hikes and the friends list are private, so they only appear on your own profile
+const OWN_TABS: ProfileTab[] = ["posts", "mountain", "saved", "tagged", "friends"];
+const OTHER_TABS: ProfileTab[] = ["posts", "mountain", "tagged"];
 
 export default function Profile({
-  user,
+  profile,
+  isOwn,
   posts,
-  onUpdatePost,
+  ranking,
+  onOpenPost,
   onLogHike,
   onSignOut,
   friendUsernames,
   onToggleFriend,
 }: {
-  user: AuthUser;
+  profile: Friend; // whose profile this is
+  isOwn: boolean; // true when it's the signed-in user's own profile
   posts: FeedPost[];
-  onUpdatePost: (id: string, update: (post: FeedPost) => FeedPost) => void;
+  ranking: string[]; // this user's mountain, #1 first
+  onOpenPost: (id: string) => void;
   onLogHike: () => void;
   onSignOut: () => void;
   friendUsernames: string[];
@@ -32,67 +38,86 @@ export default function Profile({
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
   const [showAddFriends, setShowAddFriends] = useState(false);
   const [friendQuery, setFriendQuery] = useState("");
-  const username = usernameFor(user);
-  const identity = [username, user.name.toLowerCase()];
-  const ownPosts = posts.filter((post) => identity.includes(post.friend.username.toLowerCase()));
+  const firstName = profile.name.split(" ")[0];
+  const identity = [profile.username.toLowerCase(), profile.name.toLowerCase()];
+  const ownPosts = posts.filter((post) => post.friend.id === profile.id);
   const savedPosts = posts.filter((post) => post.saved);
   const taggedPosts = posts.filter((post) => post.taggedUsers?.some((tag) => identity.includes(tag.toLowerCase())));
   const directory = useMemo(() => [...Object.values(friends), ...suggestions], []);
   const visibleFriends = directory.filter((friend) => friendUsernames.includes(friend.username));
+  const isFriend = friendUsernames.includes(profile.username);
   const matchingSuggestions = suggestions.filter((friend) =>
     `${friend.name} ${friend.username}`.toLowerCase().includes(friendQuery.trim().toLowerCase()),
   );
+  const tabs = isOwn ? OWN_TABS : OTHER_TABS;
   const visiblePosts =
     activeTab === "posts" ? ownPosts : activeTab === "saved" ? savedPosts : taggedPosts;
 
-  const renderPost = (post: FeedPost) => (
-    <HikePost
-      key={post.id}
-      onAddComment={(comment) =>
-        onUpdatePost(post.id, (current) => ({ ...current, comments: [...current.comments, comment] }))
+  const emptyCopy: Record<"posts" | "saved" | "tagged", { title: string; body: string }> = isOwn
+    ? {
+        posts: { title: "Your trail stories start here", body: "Log a hike and share the view with your crew." },
+        saved: { title: "No saved hikes yet", body: "Save a hike from the feed and it will show up here." },
+        tagged: { title: "No tagged hikes yet", body: "When a friend tags you in a hike, it will show up here." },
       }
-      onToggleLike={() =>
-        onUpdatePost(post.id, (current) => ({
-          ...current,
-          liked: !current.liked,
-          likes: current.likes + (current.liked ? -1 : 1),
-        }))
-      }
-      onToggleSave={() => onUpdatePost(post.id, (current) => ({ ...current, saved: !current.saved }))}
-      post={post}
-    />
-  );
+    : {
+        posts: { title: "No hikes posted yet", body: `When ${firstName} logs a hike, it will show up here.` },
+        saved: { title: "", body: "" },
+        tagged: { title: "No tagged hikes yet", body: `Hikes ${firstName} is tagged in will show up here.` },
+      };
 
   return (
     <section className="screen-content profile-screen">
       <header className="profile-heading">
         <div className="profile-identity">
-          <span aria-hidden="true" className="profile-avatar">{user.avatar ? <img alt="" src={user.avatar} /> : user.name.charAt(0).toUpperCase()}</span>
+          <span aria-hidden="true" className="profile-avatar" style={{ background: profile.color }}>
+            {profile.avatar ? <img alt="" src={profile.avatar} /> : profile.name.charAt(0).toUpperCase()}
+          </span>
           <div>
             <span className="eyebrow">TrailMix hiker</span>
-            <h1>{user.name}</h1>
-            <p>@{username}</p>
+            <h1>{profile.name}</h1>
+            <p>@{profile.username}</p>
           </div>
         </div>
-        <button
-          aria-label="Add friends"
-          className="profile-add-button"
-          onClick={() => setShowAddFriends(true)}
-          type="button"
-        >
-          <span aria-hidden="true">+</span>
-          <span>Add friends</span>
-        </button>
+        {isOwn ? (
+          <button
+            aria-label="Add friends"
+            className="profile-add-button"
+            onClick={() => setShowAddFriends(true)}
+            type="button"
+          >
+            <span aria-hidden="true">+</span>
+            <span>Add friends</span>
+          </button>
+        ) : (
+          <button
+            aria-pressed={isFriend}
+            className={`profile-add-button ${isFriend ? "following" : ""}`}
+            onClick={() => onToggleFriend(profile.username)}
+            type="button"
+          >
+            <span aria-hidden="true">{isFriend ? "✓" : "+"}</span>
+            <span>{isFriend ? "Following" : "Add friend"}</span>
+          </button>
+        )}
       </header>
 
       <div aria-label="Profile stats" className="profile-stats">
         <div><b>{ownPosts.length}</b><span>Posts</span></div>
         <div><b>{taggedPosts.length}</b><span>Tagged</span></div>
-        <div><b>{visibleFriends.length}</b><span>Friends</span></div>
+        {isOwn ? (
+          <div><b>{visibleFriends.length}</b><span>Friends</span></div>
+        ) : (
+          <div><b>{ranking.length}</b><span>Ranked</span></div>
+        )}
       </div>
 
-      <div aria-label="Profile sections" className="profile-tabs" role="tablist">
-        {(["posts", "saved", "tagged", "friends"] as const).map((tab) => (
+      <div
+        aria-label="Profile sections"
+        className="profile-tabs"
+        role="tablist"
+        style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+      >
+        {tabs.map((tab) => (
           <button
             aria-selected={activeTab === tab}
             className={activeTab === tab ? "selected" : ""}
@@ -122,18 +147,47 @@ export default function Profile({
             <div className="profile-empty"><h2>Your crew starts here</h2><p>Add a friend to see their trail stories.</p></div>
           )}
         </section>
+      ) : activeTab === "mountain" ? (
+        ranking.length > 0 ? (
+          <section aria-label={isOwn ? "Your mountain" : `${firstName}'s mountain`} className="profile-mountain">
+            <MountainScene ranking={ranking} />
+            <ol className="profile-rank-list">
+              {ranking.map((name, index) => (
+                <li key={name}><b>#{index + 1}</b>{name}</li>
+              ))}
+            </ol>
+          </section>
+        ) : (
+          <div className="profile-empty">
+            <span aria-hidden="true" className="profile-empty-mark">▲</span>
+            <h2>No ranked hikes yet</h2>
+            <p>{isOwn ? "Log a hike to start building your mountain." : `${firstName} hasn't ranked any hikes yet.`}</p>
+            {isOwn && <button className="profile-empty-action" onClick={onLogHike} type="button">Log a hike</button>}
+          </div>
+        )
       ) : visiblePosts.length > 0 ? (
         <div
           aria-label={
             activeTab === "posts"
-              ? "Your posts"
+              ? isOwn ? "Your posts" : `${firstName}'s posts`
               : activeTab === "saved"
                 ? "Your saved hikes"
-                : "Posts you are tagged in"
+                : isOwn ? "Posts you are tagged in" : `Posts ${firstName} is tagged in`
           }
-          className="profile-posts"
+          className="profile-grid"
         >
-          {visiblePosts.map(renderPost)}
+          {visiblePosts.map((post) => (
+            <button
+              aria-label={`Open ${post.friend.name}'s hike at ${post.trail.name}`}
+              className="profile-grid-tile"
+              key={post.id}
+              onClick={() => onOpenPost(post.id)}
+              type="button"
+            >
+              <img alt="" src={post.image} />
+              <span>{post.trail.name}</span>
+            </button>
+          ))}
         </div>
       ) : (
         <div className="profile-empty">
@@ -144,21 +198,9 @@ export default function Profile({
               </svg>
             ) : "@"}
           </span>
-          <h2>
-            {activeTab === "posts"
-              ? "Your trail stories start here"
-              : activeTab === "saved"
-                ? "No saved hikes yet"
-                : "No tagged hikes yet"}
-          </h2>
-          <p>
-            {activeTab === "posts"
-              ? "Log a hike and share the view with your crew."
-              : activeTab === "saved"
-                ? "Save a hike from the feed and it will show up here."
-                : "When a friend tags you in a hike, it will show up here."}
-          </p>
-          {activeTab === "posts" && <button className="profile-empty-action" onClick={onLogHike} type="button">Log a hike</button>}
+          <h2>{emptyCopy[activeTab].title}</h2>
+          <p>{emptyCopy[activeTab].body}</p>
+          {isOwn && activeTab === "posts" && <button className="profile-empty-action" onClick={onLogHike} type="button">Log a hike</button>}
         </div>
       )}
 
@@ -180,18 +222,18 @@ export default function Profile({
             </label>
             <div className="friend-suggestion-list">
               {matchingSuggestions.length > 0 ? matchingSuggestions.map((friend) => {
-                const isFriend = friendUsernames.includes(friend.username);
+                const added = friendUsernames.includes(friend.username);
                 return (
                   <div className="profile-friend-row" key={friend.username}>
                     <span className="profile-friend-avatar" style={{ background: friend.color }}>{friend.name.charAt(0)}</span>
                     <span className="profile-friend-copy"><b>{friend.name}</b><small>@{friend.username}</small></span>
                     <button
-                      aria-pressed={isFriend}
-                      className={isFriend ? "added" : ""}
+                      aria-pressed={added}
+                      className={added ? "added" : ""}
                       onClick={() => onToggleFriend(friend.username)}
                       type="button"
                     >
-                      {isFriend ? "Added" : "Add"}
+                      {added ? "Added" : "Add"}
                     </button>
                   </div>
                 );
@@ -200,7 +242,7 @@ export default function Profile({
           </section>
         </div>
       )}
-      <button className="auth-signout profile-signout" onClick={onSignOut} type="button">Sign out</button>
+      {isOwn && <button className="auth-signout profile-signout" onClick={onSignOut} type="button">Sign out</button>}
     </section>
   );
 }

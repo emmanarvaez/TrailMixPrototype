@@ -639,3 +639,31 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
   .tour-mascot { width: 104px; }
   .tour-bubble { font-size: 15px; }
 }
+
+/* ── Clickable profile links on posts (avatar, name, caption, comment authors) ── */
+.profile-link { flex: none; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.profile-link:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; border-radius: 8px; }
+.profile-link:hover b { text-decoration: underline; text-underline-offset: 2px; }
+.post-author-line.profile-link { max-width: 100%; }
+.post-caption .profile-link { display: inline; }
+
+/* ── Profile: photo grid, mountain tab, other users' profiles ── */
+.profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.profile-grid-tile { position: relative; aspect-ratio: 1; padding: 0; border: 0; border-radius: 10px; overflow: hidden; background: #ded8c9; cursor: pointer; }
+.profile-grid-tile img { width: 100%; height: 100%; display: block; object-fit: cover; filter: saturate(.85); transition: transform .2s ease; }
+.profile-grid-tile:hover img { transform: scale(1.04); }
+.profile-grid-tile span {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 6px 5px; text-align: left;
+  background: linear-gradient(0deg, rgba(23, 35, 27, .72), transparent); color: #fffaf0;
+  font-family: "Inter:Semi Bold"; font-size: 10px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.profile-grid-tile:focus-visible { outline: 3px solid var(--orange); outline-offset: 1px; }
+.profile-mountain .mountain-scene { margin: 0 -18px; }
+.profile-rank-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.profile-rank-list li { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-bottom: 1px solid #ebe3d4; font-size: 14px; color: #3a2c1e; }
+.profile-rank-list li:last-child { border-bottom: 0; }
+.profile-rank-list b { width: 28px; flex: none; color: #8a7e70; font-family: "Inter:Semi Bold"; font-size: 12px; font-weight: normal; }
+.profile-add-button.following { background: var(--forest); color: #fffaf0; }
+.post-detail-screen { padding-top: 4px; }
+.post-missing { padding: 48px 12px; text-align: center; color: var(--muted); }
+

@@ -25,6 +25,8 @@ type UsersContextValue = {
   currentUser: Friend;
   /** Every known profile by user ID, used to resolve comment authors. */
   users: Record<string, Friend>;
+  /** Opens a user's profile; the signed-in user's own ID goes to the Profile tab. */
+  openProfile: (id: string) => void;
 };
 
 export const UsersContext = createContext<UsersContextValue | null>(null);
