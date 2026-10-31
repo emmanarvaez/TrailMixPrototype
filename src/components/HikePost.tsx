@@ -96,7 +96,11 @@ export default function HikePost({ post }: { post: FeedPost }) {
   const [burst, setBurst] = useState(0);
   const [commentError, setCommentError] = useState("");
   const { currentUser, users, getUser, getRank, openProfile } = useUsers();
-  const { toggleLike, toggleSave, addComment } = usePosts();
+  const { toggleLike, toggleSave, addComment, setPostArchived, deletePost } = usePosts();
+  // Your own posts get a ⋯ menu to archive or delete them
+  const [menu, setMenu] = useState<"closed" | "open" | "confirm-delete">("closed");
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
   const onToggleLike = () => toggleLike(post.id);
   const { trail } = post;
   // The author's latest profile, so a changed username or photo shows on older posts too
@@ -116,6 +120,21 @@ export default function HikePost({ post }: { post: FeedPost }) {
       setDraft(text);
       setCommentError("Couldn't post your comment. Try again?");
     });
+  };
+
+  const isMine = post.friend.id === currentUser.id;
+
+  const runAction = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setActionError("");
+    try {
+      await action();
+      setMenu("closed");
+    } catch (error) {
+      setActionError((error as { message?: string })?.message ?? "Something went wrong. Try again?");
+    } finally {
+      setBusy(false);
+    }
   };
 
   // Double-tap the photo to like (never unlikes), like Instagram.
@@ -138,7 +157,50 @@ export default function HikePost({ post }: { post: FeedPost }) {
           <span className="post-trail">hiked <strong>{trail.name}</strong></span>
         </div>
         <time className="post-date" dateTime={post.date}>{formatDate(post.date)}</time>
+        {isMine && (
+          <button
+            aria-expanded={menu !== "closed"}
+            aria-label="Post options"
+            className="post-menu-button"
+            onClick={() => { setMenu(menu === "closed" ? "open" : "closed"); setActionError(""); }}
+            type="button"
+          >
+            ⋯
+          </button>
+        )}
       </header>
+
+      {post.archived && <p className="post-archived-note">Archived · only you can see this hike</p>}
+
+      {menu === "open" && (
+        <div className="post-menu" role="menu">
+          <button disabled={busy} onClick={() => runAction(() => setPostArchived(post.id, !post.archived))} role="menuitem" type="button">
+            <b>{post.archived ? "Unarchive" : "Archive"}</b>
+            <small>{post.archived ? "Show it on your profile and in the feed again." : "Hide it from everyone but you. You can bring it back anytime."}</small>
+          </button>
+          <button className="danger" disabled={busy} onClick={() => setMenu("confirm-delete")} role="menuitem" type="button">
+            <b>Delete</b>
+            <small>Remove it for good.</small>
+          </button>
+          {actionError && <p className="post-menu-error" role="alert">{actionError}</p>}
+        </div>
+      )}
+
+      {menu === "confirm-delete" && (
+        <div aria-label="Delete this hike?" className="post-menu post-delete-confirm" role="alertdialog">
+          <p>
+            <b>Delete this hike?</b>
+            It'll be removed from your posts, your mountain and your trail mix, along with its photos, likes and comments. This can't be undone.
+          </p>
+          {actionError && <p className="post-menu-error" role="alert">{actionError}</p>}
+          <div className="post-delete-buttons">
+            <button disabled={busy} onClick={() => setMenu("closed")} type="button">Cancel</button>
+            <button className="danger" disabled={busy} onClick={() => runAction(() => deletePost(post.id))} type="button">
+              {busy ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="post-photo" onDoubleClick={likeFromPhoto}>
         <MediaCarousel label={`${friend.name} on ${trail.name}`} media={post.media} />

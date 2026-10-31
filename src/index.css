@@ -743,8 +743,29 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 .username-status.available, .username-status.unchanged { color: var(--forest); font-family: "Inter:Semi Bold"; }
 .username-status.taken, .username-status.invalid, .username-status.error { color: #a83f2a; }
 .profile-friend-row > button.follow { background: var(--forest); border-color: var(--forest); color: #fffaf0; }
-.people-search-results { margin-bottom: 18px; }
 .post-tagged { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 .post-tag-link { color: var(--forest); font-family: "Inter:Semi Bold"; }
 .pick-username-cashew { display: block; width: 130px; margin: -10px auto 8px; }
 .settings-form .username-field { color: var(--deep-forest); }
+
+/* ── Your own posts: archive / delete ── */
+.post-menu-button { flex: none; align-self: flex-start; width: 32px; height: 28px; margin: -4px -6px 0 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; }
+.post-menu-button:hover, .post-menu-button[aria-expanded="true"] { background: var(--pale-sage); color: var(--forest); }
+.post-archived-note { margin: -4px 14px 8px; color: var(--muted); font-family: "Inter:Semi Bold"; font-size: 11px; }
+.post-menu { margin: 0 14px 10px; padding: 6px; border: 1.5px solid #e1dac9; border-radius: 15px; background: #fffaf0; box-shadow: 0 6px 18px rgba(37,67,47,.1); }
+.post-menu > button { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 10px; border: 0; border-radius: 11px; background: transparent; text-align: left; cursor: pointer; }
+.post-menu > button:hover { background: var(--pale-sage); }
+.post-menu > button b { color: var(--deep-forest); font-family: "Inter:Semi Bold"; font-weight: normal; font-size: 14px; }
+.post-menu > button small { color: var(--muted); font-size: 12px; }
+.post-menu > button.danger b { color: #b83a26; }
+.post-menu > button.danger:hover { background: #f8e3dc; }
+.post-menu-error { margin: 6px 8px; color: #a83f2a; font-size: 12px; }
+.post-delete-confirm { padding: 12px 14px; border-color: #e9b9a8; background: #fff4ee; }
+.post-delete-confirm p { margin: 0; color: #5a3e2b; font-size: 13px; line-height: 1.45; }
+.post-delete-confirm p b { display: block; margin-bottom: 2px; color: #3a2c1e; font-size: 14px; }
+.post-delete-buttons { display: flex; gap: 8px; margin-top: 10px; }
+.post-delete-buttons button { flex: 1; min-height: 40px; border: 0; border-radius: 12px; background: #f0e8dc; color: #5a3e2b; font-family: "Inter:Semi Bold"; font-size: 14px; cursor: pointer; }
+.post-delete-buttons button.danger { background: #c2412b; color: white; }
+.post-delete-buttons button:disabled, .post-menu > button:disabled { opacity: .6; cursor: default; }
+.profile-archive-toggle { display: inline-flex; align-items: center; gap: 6px; margin: -6px 0 12px; padding: 7px 12px; border: 1.5px solid #d7d4c6; border-radius: 12px; background: #fffaf0; color: var(--forest); font-family: "Inter:Semi Bold"; font-size: 12px; cursor: pointer; }
+.profile-archive-toggle:hover { background: var(--pale-sage); }

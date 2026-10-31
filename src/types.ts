@@ -44,7 +44,9 @@ export type FeedPost = {
   saved: boolean;
   comments: PostComment[];
   taggedUserIds: string[];
+  archived: boolean; // archived posts are hidden from everyone but their owner
 };
+
 
 // One of the signed-in user's own hike logs, for Accomplishments and their mountain
 export type HikeLog = {

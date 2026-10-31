@@ -137,6 +137,7 @@ export async function setFollowing(userId: string, friendId: string, follow: boo
 type PostRow = {
   id: string;
   user_id: string;
+  archived_at?: string | null;
   trail_name: string | null;
   date: string;
   caption: string | null;
@@ -159,12 +160,16 @@ export async function fetchPosts(
 ): Promise<{ posts: FeedPost[]; profiles: Friend[] }> {
   const ids = filter.userIds ?? filter.logIds ?? [];
   if (!ids.length) return { posts: [], profiles: [] };
-  let request = supabase.from("hike_logs").select(POST_COLUMNS);
-  request = filter.userIds ? request.in("user_id", ids) : request.in("id", ids);
-  const { data, error } = await request
-    .order("date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit);
+  const query = (columns: string) => {
+    const request = supabase.from("hike_logs").select(columns);
+    return (filter.userIds ? request.in("user_id", ids) : request.in("id", ids))
+      .order("date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+  };
+  let { data, error } = await query(`${POST_COLUMNS}, archived_at`);
+  // Before 006_archive.sql is run there's no archived_at column: load posts without it
+  if (error?.code === "42703") ({ data, error } = await query(POST_COLUMNS));
   if (error) throw error;
   const rows = data as unknown as PostRow[];
 
@@ -181,7 +186,7 @@ export async function fetchPosts(
     const trailName = row.trail_name ?? row.trails?.name ?? "A trail";
     return {
       id: row.id,
-      friend: byId.get(row.user_id) ?? { id: row.user_id, name: "TrailMix hiker", username: "hiker", color: colorFor(row.user_id) },
+      friend: byId.get(row.user_id) ?? { id: row.user_id, name: "TrailMix hiker", username: "", color: colorFor(row.user_id) },
       trail: row.trails ? toTrail(row.trails) : { name: trailName, meta: "", image: trailPlaceholder(trailName), distance: "", elevation: "" },
       media: [...row.log_photos]
         .sort((a, b) => a.sort_order - b.sort_order)
@@ -195,6 +200,7 @@ export async function fetchPosts(
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((comment): PostComment => ({ id: comment.id, authorId: comment.user_id, text: comment.body })),
       taggedUserIds: row.log_tags.map((tag) => tag.tag),
+      archived: !!row.archived_at,
     };
   });
   return { posts, profiles };
@@ -301,6 +307,11 @@ function rankUpdates(logs: HikeLog[], order: string[]) {
     .filter(({ log, rank }) => log.rank !== rank);
 }
 
+// The user's mountain as trail names, #1 first, from their ranked hike logs
+export function rankingFrom(logs: HikeLog[]): string[] {
+  return [...new Set(logs.filter((log) => log.rank !== null).sort((a, b) => a.rank! - b.rank!).map((log) => log.trailName))];
+}
+
 export async function saveRanking(logs: HikeLog[], order: string[]) {
   const results = await Promise.all(
     rankUpdates(logs, order).map(({ log, rank }) => supabase.from("hike_logs").update({ rank }).eq("id", log.id)),
@@ -397,4 +408,40 @@ export async function saveHikeLog({
   const failed = results.find((result) => result?.error);
   if (failed?.error) throw failed.error;
   return logId;
+}
+
+// ─── Archiving and deleting your own hikes ───────────────────────────────────
+
+export async function setArchived(logId: string, archived: boolean) {
+  const { error } = await supabase
+    .from("hike_logs")
+    .update({ archived_at: archived ? new Date().toISOString() : null })
+    .eq("id", logId);
+  if (error) {
+    throw error.code === "42703" || error.code === "PGRST204"
+      ? new Error("Archiving needs 007_archive.sql to be run in Supabase first.")
+      : error;
+  }
+}
+
+// Deletes a hike and everything attached to it (photos, tags, comments, likes and saves
+// cascade in the database), removes its files, and closes the gap it leaves on the mountain
+export async function deleteHikeLog(userId: string, logId: string) {
+  const { data: photos } = await supabase.from("log_photos").select("url").eq("log_id", logId);
+  const marker = `/${MEDIA_BUCKET}/`;
+  const paths = (photos ?? [])
+    .map((photo) => photo.url as string)
+    .filter((url) => url.includes(marker))
+    .map((url) => decodeURIComponent(url.slice(url.indexOf(marker) + marker.length)));
+
+  const { error } = await supabase.from("hike_logs").delete().eq("id", logId).eq("user_id", userId);
+  if (error) throw error;
+
+  if (paths.length) {
+    // Best effort: a leftover file shouldn't make the delete look like it failed
+    const { error: storageError } = await supabase.storage.from(MEDIA_BUCKET).remove(paths);
+    if (storageError) console.error("Couldn't delete hike files", storageError);
+  }
+  const remaining = await fetchMyLogs(userId);
+  await saveRanking(remaining, rankingFrom(remaining));
 }

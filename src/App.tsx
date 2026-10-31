@@ -18,6 +18,7 @@ import {
   fetchProfiles,
   fetchRankings,
   fetchUnlockedIngredients,
+  rankingFrom,
   saveHikeLog,
   saveRanking,
   setFollowing,
@@ -1834,11 +1835,6 @@ function Accomplishments({
 
 type View = { kind: "profile" | "post"; id: string; scrollY: number };
 
-// The user's mountain as trail names, #1 first, from their ranked hike logs
-function rankingFrom(logs: HikeLog[]): string[] {
-  return [...new Set(logs.filter((log) => log.rank !== null).sort((a, b) => a.rank! - b.rank!).map((log) => log.trailName))];
-}
-
 const message = (error: unknown) => (error as { message?: string })?.message ?? "Something went wrong.";
 
 export default function App() {
@@ -1896,7 +1892,10 @@ export default function App() {
     [loadRankings],
   );
 
-  const { value: postsValue, reset: resetPosts } = usePostsStore(userId, addProfiles);
+  // Archiving or deleting a post refreshes the feed and the user's hikes (mountain, jar, stats).
+  // A ref, because those refresh functions are built from the posts store itself.
+  const onPostsChanged = useRef(() => {});
+  const { value: postsValue, reset: resetPosts } = usePostsStore(userId, addProfiles, () => onPostsChanged.current());
   const { loadPosts } = postsValue;
 
   const refreshFeed = useCallback(
@@ -1924,6 +1923,11 @@ export default function App() {
       setAccomError(message(error));
     }
   }, [userId]);
+
+  onPostsChanged.current = () => {
+    refreshMine();
+    refreshFeed(following);
+  };
 
   // Load everything for the signed-in user
   useEffect(() => {
@@ -2085,15 +2089,7 @@ export default function App() {
       <div hidden={!!view}>
       {tab === "feed" && (
         <Shell>
-          <Feed
-            currentUserId={user.id}
-            following={following}
-            loadError={feedError}
-            onFindFriends={() => setShowFindFriends(true)}
-            onOpenProfile={openProfile}
-            onToggleFollow={toggleFollow}
-            posts={feedPosts}
-          />
+          <Feed loadError={feedError} onFindFriends={() => setShowFindFriends(true)} posts={feedPosts} />
         </Shell>
       )}
       {tab === "accomplishments" && (

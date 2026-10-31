@@ -37,6 +37,8 @@ export default function Profile({
   onToggleFollow: (person: Friend) => void;
 }) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
+  // Your own archived hikes, shown in place of your posts when opened
+  const [showArchived, setShowArchived] = useState(false);
   const { posts, loadPosts } = usePosts();
   // Post IDs for each list; null while loading
   const [ownIds, setOwnIds] = useState<string[] | null>(null);
@@ -91,7 +93,12 @@ export default function Profile({
   const toPosts = (ids: string[] | null) => (ids ?? []).map((id) => posts[id]).filter((post): post is FeedPost => !!post);
   // Unsaving a hike elsewhere removes it from the Saved tab straight away
   const listIds = activeTab === "posts" ? ownIds : activeTab === "saved" ? savedIds : taggedIds;
-  const visiblePosts = activeTab === "saved" ? toPosts(savedIds).filter((post) => post.saved) : toPosts(listIds);
+  // Archived hikes only show in your own Archived list
+  const archivedPosts = toPosts(ownIds).filter((post) => post.archived);
+  const viewingArchive = isOwn && activeTab === "posts" && showArchived && archivedPosts.length > 0;
+  const visiblePosts = viewingArchive
+    ? archivedPosts
+    : (activeTab === "saved" ? toPosts(savedIds).filter((post) => post.saved) : toPosts(listIds)).filter((post) => !post.archived);
 
   const emptyCopy: Record<"posts" | "saved" | "tagged", { title: string; body: string }> = isOwn
     ? {
@@ -138,7 +145,7 @@ export default function Profile({
 
       {/* Counts always show a number: 0 while loading or when there's nothing yet */}
       <div aria-label="Profile stats" className="profile-stats">
-        <div><b>{ownIds?.length ?? 0}</b><span>Posts</span></div>
+        <div><b>{toPosts(ownIds).filter((post) => !post.archived).length}</b><span>Posts</span></div>
         {(["followers", "following"] as const).map((list) => (
           <button
             aria-pressed={activeTab === list}
@@ -164,7 +171,7 @@ export default function Profile({
             aria-selected={activeTab === tab}
             className={activeTab === tab ? "selected" : ""}
             key={tab}
-            onClick={() => setActiveTab(tab)}
+            onClick={() => { setActiveTab(tab); setShowArchived(false); }}
             role="tab"
             type="button"
           >
@@ -226,7 +233,15 @@ export default function Profile({
             {isOwn && <button className="profile-empty-action" onClick={onLogHike} type="button">Log a Hike</button>}
           </div>
         )
-      ) : listIds === null ? (
+      ) : null}
+
+      {isOwn && activeTab === "posts" && archivedPosts.length > 0 && (
+        <button className="profile-archive-toggle" onClick={() => setShowArchived(!showArchived)} type="button">
+          {viewingArchive ? "← Back to your posts" : `Archived hikes (${archivedPosts.length})`}
+        </button>
+      )}
+
+      {showingPeople || activeTab === "mountain" ? null : listIds === null ? (
         <p className="trail-search-note">Loading hikes…</p>
       ) : visiblePosts.length > 0 ? (
         <div
