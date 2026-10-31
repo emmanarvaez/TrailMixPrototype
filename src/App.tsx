@@ -849,7 +849,6 @@ function TrailSelect({
                 window.setTimeout(onNext, 140);
               }}
             >
-              <img alt="" src={trail.image} />
               <span className="trail-copy">
                 <b>{trail.name}</b>
                 <small>{trail.meta}</small>

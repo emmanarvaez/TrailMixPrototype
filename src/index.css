@@ -141,10 +141,9 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .section-heading span { font-size: 12px; color: var(--muted); }
 .trail-list { display: flex; flex-direction: column; gap: 10px; }
 .trail-card {
-  width: 100%; min-height: 76px; border: 1.5px solid transparent; border-radius: 18px; background: rgba(255,255,255,.85);
-  display: flex; align-items: center; padding: 7px 12px 7px 7px; gap: 12px; text-align: left; box-shadow: 0 4px 14px rgba(37,67,47,.07); transition: .2s ease;
+  width: 100%; min-height: 64px; border: 1.5px solid transparent; border-radius: 18px; background: rgba(255,255,255,.85);
+  display: flex; align-items: center; padding: 12px 12px 12px 16px; gap: 12px; text-align: left; box-shadow: 0 4px 14px rgba(37,67,47,.07); transition: .2s ease;
 }
-.trail-card img { width: 62px; height: 62px; border-radius: 13px; object-fit: cover; filter: saturate(.85) contrast(.95); }
 .trail-card.selected { border-color: var(--orange); background: #fff8ed; transform: translateX(2px); box-shadow: 0 5px 18px rgba(198,86,44,.12); }
 .trail-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 6px; }
 .trail-copy b { font-family: "Inter:Semi Bold"; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
