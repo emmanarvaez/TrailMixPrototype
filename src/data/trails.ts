@@ -1,12 +1,14 @@
 export type Difficulty = "Easy" | "Moderate" | "Hard";
 
 export type Trail = {
+  id?: string; // set for trails loaded from Supabase
   name: string;
+  area?: string;
   meta: string;
   image: string;
-  distance: string;
-  elevation: string;
-  difficulty: Difficulty;
+  distance: string; // "" when unknown
+  elevation: string; // "" when unknown (OSM trails have no elevation data)
+  difficulty?: Difficulty;
 };
 
 export const trailPhotos = [

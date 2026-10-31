@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
@@ -9,6 +9,7 @@ import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import { UsersContext, profileFromAuth } from "./context/UsersContext";
 import { supabase } from "./lib/supabase";
+import { searchTrails } from "./lib/trails";
 import { friends, initialFeedPosts, mockRankings, type FeedPost, type Friend } from "./data/feedPosts";
 import { trailPhotos, trails, type Trail } from "./data/trails";
 
@@ -795,7 +796,27 @@ function TrailSelect({
   onNext: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const filtered = trails.filter((trail) => trail.name.toLowerCase().includes(query.toLowerCase()));
+  const [results, setResults] = useState<Trail[] | null>(null); // null while the first search loads
+  const [searchError, setSearchError] = useState("");
+  const latestSearch = useRef(0);
+
+  // Search the trails table as the user types (short pause first so every keystroke isn't a request)
+  useEffect(() => {
+    const searchId = ++latestSearch.current;
+    const timer = window.setTimeout(() => {
+      searchTrails(query)
+        .then((found) => {
+          if (searchId !== latestSearch.current) return; // a newer search has started
+          setResults(found);
+          setSearchError("");
+        })
+        .catch((error) => {
+          if (searchId !== latestSearch.current) return;
+          setSearchError(error?.message ?? "Something went wrong.");
+        });
+    }, query ? 200 : 0);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   return (
     <Shell step={1}>
@@ -810,14 +831,19 @@ function TrailSelect({
           <input onChange={(event) => setQuery(event.target.value)} placeholder="Search trails" value={query} />
         </label>
         <div className="section-heading">
-          <h2>Near you</h2>
+          <h2>{query.trim() ? "Matching trails" : "Near you"}</h2>
           <span>Orange County</span>
         </div>
         <div className="trail-list">
-          {filtered.map((trail) => (
+          {searchError && <p className="trail-search-note">Couldn't load trails: {searchError}</p>}
+          {!searchError && results === null && <p className="trail-search-note">Loading trails…</p>}
+          {!searchError && results?.length === 0 && (
+            <p className="trail-search-note">No trails match "{query.trim()}". Try another name.</p>
+          )}
+          {(results ?? []).map((trail) => (
             <button
               className={`trail-card ${selected?.name === trail.name ? "selected" : ""}`}
-              key={trail.name}
+              key={trail.id ?? trail.name}
               onClick={() => {
                 setSelected(trail);
                 window.setTimeout(onNext, 140);
@@ -832,6 +858,11 @@ function TrailSelect({
             </button>
           ))}
         </div>
+        {/* Required by OpenStreetMap's licence (ODbL) */}
+        <p className="osm-attribution">
+          Trail data ©{" "}
+          <a href="https://www.openstreetmap.org/copyright" rel="noreferrer" target="_blank">OpenStreetMap contributors</a>
+        </p>
       </section>
       <div className="sticky-action">
         <Button disabled={!selected} onClick={onNext}>Next</Button>
@@ -1295,7 +1326,7 @@ function Result({
 
   // Stats
   const totalHikes = ranking.length + lowerRanking.length;
-  const miles = trail.meta.split("·")[0].trim();
+  const miles = trail.distance || "—";
   const resultVariant = getResultVariant(rank, totalHikes);
 
   // Full ranked list combining mountain + lower ranks
