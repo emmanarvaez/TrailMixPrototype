@@ -406,7 +406,7 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .post-stat.difficulty-hard { background: var(--orange); color: white; }
 .post-rank-tag {
   position: absolute; z-index: 2; top: 10px; left: 10px; display: inline-flex; align-items: center; gap: 5px;
-  border-radius: 20px; padding: 5px 10px 5px 8px; background: rgba(255,250,239,.92); color: var(--forest);
+  border-radius: 20px; padding: 5px 10px; background: rgba(255,250,239,.92); color: var(--forest);
   font-family: "Inter:Semi Bold"; font-size: 11px; backdrop-filter: blur(6px); box-shadow: 0 2px 8px rgba(23,35,27,.16); pointer-events: none;
 }
 .post-rank-tag b { color: var(--orange); font-family: "Inter:Bold"; font-weight: normal; }

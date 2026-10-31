@@ -111,7 +111,6 @@ export default function HikePost({
         <img alt={`${friend.name} on ${trail.name}`} draggable={false} src={post.image} />
         {rank !== null && (
           <span className="post-rank-tag">
-            <span aria-hidden="true">🏔️</span>
             <b>#{rank}</b> on {mountainOwner} mountain
           </span>
         )}
