@@ -930,19 +930,22 @@ function RateTrail({
         </div>
         <div className="difficulty-field">
           <div className="section-heading">
-            <h2>How difficult was it?</h2>
-            <span>{["Easy", "Moderate", "Tough"][difficulty - 1]}</span>
+            <h2 id="difficulty-heading">How difficult was it?</h2>
           </div>
-          <input
-            aria-label="Hike difficulty"
-            max="3"
-            min="1"
-            onChange={(event) => setDifficulty(Number(event.target.value))}
-            step="1"
-            type="range"
-            value={difficulty}
-          />
-          <div className="difficulty-labels"><span>Easy</span><span>Moderate</span><span>Tough</span></div>
+          <div aria-labelledby="difficulty-heading" className="difficulty-options" role="radiogroup">
+            {["Easy", "Moderate", "Tough"].map((label, index) => (
+              <button
+                aria-checked={difficulty === index + 1}
+                className={difficulty === index + 1 ? "selected" : ""}
+                key={label}
+                onClick={() => setDifficulty(index + 1)}
+                role="radio"
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <Mascot key={ratingVariant} variant={ratingVariant} />
       </section>
