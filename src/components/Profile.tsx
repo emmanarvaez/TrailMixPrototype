@@ -10,8 +10,9 @@ const suggestions: Friend[] = [
 
 type ProfileTab = "posts" | "mountain" | "saved" | "tagged" | "friends";
 
-// Saved hikes and the friends list are private, so they only appear on your own profile
-const OWN_TABS: ProfileTab[] = ["posts", "mountain", "saved", "tagged", "friends"];
+// Saved hikes are private, so they only appear on your own profile. The friends list
+// isn't a tab: it opens from the Friends count under your profile picture.
+const OWN_TABS: ProfileTab[] = ["posts", "mountain", "saved", "tagged"];
 const OTHER_TABS: ProfileTab[] = ["posts", "mountain", "tagged"];
 
 export default function Profile({
@@ -105,7 +106,14 @@ export default function Profile({
         <div><b>{ownPosts.length}</b><span>Posts</span></div>
         <div><b>{taggedPosts.length}</b><span>Tagged</span></div>
         {isOwn ? (
-          <div><b>{visibleFriends.length}</b><span>Friends</span></div>
+          <button
+            aria-pressed={activeTab === "friends"}
+            className={activeTab === "friends" ? "selected" : ""}
+            onClick={() => setActiveTab(activeTab === "friends" ? "posts" : "friends")}
+            type="button"
+          >
+            <b>{visibleFriends.length}</b><span>Friends</span>
+          </button>
         ) : (
           <div><b>{ranking.length}</b><span>Ranked</span></div>
         )}
