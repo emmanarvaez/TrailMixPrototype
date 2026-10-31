@@ -71,8 +71,11 @@ export default function HikePost({
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
-  const { currentUser, getUser, openProfile } = useUsers();
+  const { currentUser, getUser, getRank, openProfile } = useUsers();
   const { friend, trail } = post;
+  // The poster's own ranking, read live so it follows any later re-ranking
+  const rank = getRank(friend.id, trail.name);
+  const mountainOwner = friend.id === currentUser.id ? "your" : "their";
 
   const submitComment = (event: FormEvent) => {
     event.preventDefault();
@@ -106,6 +109,12 @@ export default function HikePost({
 
       <div className="post-photo" onDoubleClick={likeFromPhoto}>
         <img alt={`${friend.name} on ${trail.name}`} draggable={false} src={post.image} />
+        {rank !== null && (
+          <span className="post-rank-tag">
+            <span aria-hidden="true">🏔️</span>
+            <b>#{rank}</b> on {mountainOwner} mountain
+          </span>
+        )}
         {burst > 0 && (
           <span className="like-burst" key={burst}>
             <HeartIcon filled />

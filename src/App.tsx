@@ -909,6 +909,7 @@ function RateTrail({
 }
 
 function RankTrail({
+  newTrail,
   ranking,
   setRanking,
   lowerRanking,
@@ -916,6 +917,7 @@ function RankTrail({
   onNext,
   onBack,
 }: {
+  newTrail: string; // the trail being logged; the only draggable item
   ranking: string[];
   setRanking: (ranking: string[]) => void;
   lowerRanking: string[];
@@ -923,7 +925,7 @@ function RankTrail({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const [showLowerRanks, setShowLowerRanks] = useState(!ranking.includes("Bommer Canyon Loop"));
+  const [showLowerRanks, setShowLowerRanks] = useState(!ranking.includes(newTrail));
   const draggingIndex = useRef<number | null>(null);
   const dragY = useRef(0);
   // Change 2: track whether the user has dragged at least once and the live drag position
@@ -967,8 +969,8 @@ function RankTrail({
   const getDragContext = (): string | null => {
     if (dragPos === null) return null;
     const items = showLowerRanks ? lowerRanking : ranking.slice(0, 4);
-    // items[dragPos - 1] has a higher rank → Bommer is below them
-    // items[dragPos + 1] has a lower rank → Bommer is above them
+    // items[dragPos - 1] has a higher rank → the new hike is below them
+    // items[dragPos + 1] has a lower rank → the new hike is above them
     const higherNeighbor = items[dragPos - 1];
     const lowerNeighbor = items[dragPos + 1];
     const parts: string[] = [];
@@ -979,14 +981,14 @@ function RankTrail({
   };
 
   const openLowerRanks = () => {
-    setRanking(ranking.filter((name) => name !== "Bommer Canyon Loop"));
-    setLowerRanking(["Bommer Canyon Loop", ...lowerRanking.filter((name) => name !== "Bommer Canyon Loop")]);
+    setRanking(ranking.filter((name) => name !== newTrail));
+    setLowerRanking([newTrail, ...lowerRanking.filter((name) => name !== newTrail)]);
     setShowLowerRanks(true);
   };
 
   const returnToMountain = () => {
-    setLowerRanking(lowerRanking.filter((name) => name !== "Bommer Canyon Loop"));
-    setRanking([...ranking.filter((name) => name !== "Bommer Canyon Loop"), "Bommer Canyon Loop"]);
+    setLowerRanking(lowerRanking.filter((name) => name !== newTrail));
+    setRanking([...ranking.filter((name) => name !== newTrail), newTrail]);
     setShowLowerRanks(false);
   };
 
@@ -998,7 +1000,7 @@ function RankTrail({
         <div className="screen-title">
           <span className="eyebrow">Your personal peaks</span>
           <h1>{showLowerRanks ? "Rank it with the rest" : "Place it on your mountain"}</h1>
-          <p>{showLowerRanks ? "Drag Bommer Canyon anywhere from #4 down." : "Drag Bommer Canyon up or down to rank it."}</p>
+          <p>{showLowerRanks ? `Drag ${newTrail} anywhere from #4 down.` : `Drag ${newTrail} up or down to rank it.`}</p>
         </div>
         {!showLowerRanks ? (
           <>
@@ -1014,7 +1016,7 @@ function RankTrail({
               </svg>
               <div className="rank-list">
                 {ranking.slice(0, 4).map((name, index) => {
-                  const isNew = name === "Bommer Canyon Loop";
+                  const isNew = name === newTrail;
                   return (
                     <div
                       className={`rank-item rank-${index + 1} ${isNew ? "new-trail" : ""} ${isNew && !hasDragged ? "show-hint" : ""}`}
@@ -1051,7 +1053,7 @@ function RankTrail({
             <button className="return-mountain" onClick={returnToMountain}>← Put it back on the mountain</button>
             <div className="lower-ranks-list">
               {lowerRanking.map((name, index) => {
-                const isNew = name === "Bommer Canyon Loop";
+                const isNew = name === newTrail;
                 return (
                   <div
                     className={`lower-rank-item ${isNew ? "new-trail" : ""} ${isNew && !hasDragged ? "show-hint" : ""}`}
@@ -1064,7 +1066,7 @@ function RankTrail({
                     onPointerMove={(event) => handleMove(event.clientY)}
                     onPointerUp={stopDrag}
                   >
-                    <span className="rank-number">#{index + 4}</span>
+                    <span className="rank-number">#{index + ranking.length + 1}</span>
                     <span className="rank-name">{name}</span>
                     {isNew && <span className="drag-handle">⠿</span>}
                   </div>
@@ -1332,7 +1334,7 @@ function Result({
           <div className="ground-shadow" />
         </div>
         <div className="rank-result">
-          <span>Bommer Canyon Loop is</span>
+          <span>{trail.name} is</span>
           <b>#{rank}</b>
           <small>in your personal rankings</small>
         </div>
@@ -1373,7 +1375,7 @@ function Result({
         <div className="full-rankings-section" ref={rankingsRef}>
           <h3>Your rankings</h3>
           {allRanked.map((name, index) => {
-            const isNew = name === "Bommer Canyon Loop";
+            const isNew = name === trail.name;
             return (
               <div className={`full-rank-item ${isNew ? "highlight" : ""}`} key={name}>
                 <span className="fr-num">#{index + 1}</span>
@@ -1771,7 +1773,14 @@ export default function App() {
   };
 
   return (
-    <UsersContext.Provider value={{ currentUser: users[user.id] ?? profileFromAuth(user), users, openProfile }}>
+    <UsersContext.Provider
+      value={{
+        currentUser: users[user.id] ?? profileFromAuth(user),
+        users,
+        openProfile,
+        rankings: { ...mockRankings, [user.id]: myRanking },
+      }}
+    >
       {view?.kind === "profile" && (
         <Shell onBack={goBack}>
           <Profile
@@ -1847,6 +1856,8 @@ export default function App() {
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
       <div hidden={tab !== "log"}>
         <LogHikeFlow
+          myRanking={myRanking}
+          onRankingChange={setMyRanking}
           onLogHike={(post) => {
             setPosts((current) => [post, ...current]);
             switchTab("profile");
@@ -1860,27 +1871,24 @@ export default function App() {
   );
 }
 
-function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void; user: AuthUser }) {
+function LogHikeFlow({
+  onLogHike,
+  user,
+  myRanking,
+  onRankingChange,
+}: {
+  onLogHike: (post: FeedPost) => void;
+  user: AuthUser;
+  myRanking: string[]; // the user's mountain, #1 first
+  onRankingChange: (ranking: string[]) => void;
+}) {
   const [step, setStep] = useState(1);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
   const [rating, setRating] = useState("");
   const [difficulty, setDifficulty] = useState(2);
-  const [ranking, setRanking] = useState([
-    "Holy Jim Falls",
-    "Bommer Canyon Loop",
-    "Top of the World",
-    "Crystal Cove Moro Ridge",
-  ]);
-  const [lowerRanking, setLowerRanking] = useState([
-    "Peters Canyon Loop",
-    "Quail Hill Trail",
-    "Black Star Canyon",
-    "Buck Gully Trail",
-    "Laguna Coast Loop",
-    "Santiago Oaks",
-    "Moro Canyon Trail",
-    "Red Rock Canyon",
-  ]);
+  // Working copy of the mountain while placing the new hike: top four, then the rest
+  const [ranking, setRanking] = useState<string[]>([]);
+  const [lowerRanking, setLowerRanking] = useState<string[]>([]);
   const [selectedDetails, setSelectedDetails] = useState<number[]>([0]);
   const [caption, setCaption] = useState("");
   const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
@@ -1891,8 +1899,18 @@ function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void;
   };
 
   if (step === 1) return <TrailSelect onNext={() => go(2)} selected={selectedTrail} setSelected={setSelectedTrail} />;
-  if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={() => go(3)} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={selectedTrail ?? trails[0]} />;
-  if (step === 3) return <RankTrail lowerRanking={lowerRanking} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} />;
+  const loggedTrail = selectedTrail ?? trails[0];
+
+  // Start from the user's real mountain with the logged trail at #4 (a repeat hike gets re-placed)
+  const startRanking = () => {
+    const others = myRanking.filter((name) => name !== loggedTrail.name);
+    setRanking([...others.slice(0, 3), loggedTrail.name]);
+    setLowerRanking(others.slice(3));
+    go(3);
+  };
+
+  if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={startRanking} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={loggedTrail} />;
+  if (step === 3) return <RankTrail lowerRanking={lowerRanking} newTrail={loggedTrail.name} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} />;
   if (step === 4) return <AddDetails caption={caption} onBack={() => go(3)} onSave={() => go(5)} selectedDetails={selectedDetails} setCaption={setCaption} setSelectedDetails={setSelectedDetails} setTaggedFriends={setTaggedFriends} taggedFriends={taggedFriends} />;
   return (
     <Result
@@ -1900,7 +1918,9 @@ function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void;
       lowerRanking={lowerRanking}
       onBack={() => go(4)}
       onRestart={() => {
-        const completedTrail = selectedTrail ?? trails[0];
+        const completedTrail = loggedTrail;
+        // Save where they placed it, so their posts' ranking tags match their mountain
+        onRankingChange([...ranking, ...lowerRanking]);
         onLogHike({
           id: `post-${Date.now()}`,
           friend: profileFromAuth(user),
@@ -1922,13 +1942,9 @@ function LogHikeFlow({ onLogHike, user }: { onLogHike: (post: FeedPost) => void;
         setSelectedTrail(null);
         go(1);
       }}
-      rank={
-        ranking.includes("Bommer Canyon Loop")
-          ? ranking.indexOf("Bommer Canyon Loop") + 1
-          : lowerRanking.indexOf("Bommer Canyon Loop") + ranking.length + 1
-      }
+      rank={[...ranking, ...lowerRanking].indexOf(loggedTrail.name) + 1}
       ranking={ranking}
-      trail={selectedTrail ?? trails[0]}
+      trail={loggedTrail}
     />
   );
 }

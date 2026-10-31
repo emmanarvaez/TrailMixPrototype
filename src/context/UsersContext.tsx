@@ -27,6 +27,8 @@ type UsersContextValue = {
   users: Record<string, Friend>;
   /** Opens a user's profile; the signed-in user's own ID goes to the Profile tab. */
   openProfile: (id: string) => void;
+  /** Each user's mountain by user ID, #1 first (trail names). */
+  rankings: Record<string, string[]>;
 };
 
 export const UsersContext = createContext<UsersContextValue | null>(null);
@@ -36,5 +38,10 @@ export function useUsers() {
   if (!value) throw new Error("useUsers must be used inside UsersContext");
   const getUser = (id: string): Friend =>
     value.users[id] ?? { id, name: "TrailMix hiker", username: "hiker", color: "#9ba196" };
-  return { ...value, getUser };
+  // Where a user placed a trail on their own mountain (1 = summit), or null if it isn't ranked
+  const getRank = (userId: string, trailName: string): number | null => {
+    const index = value.rankings[userId]?.indexOf(trailName) ?? -1;
+    return index === -1 ? null : index + 1;
+  };
+  return { ...value, getUser, getRank };
 }
