@@ -680,3 +680,52 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .osm-attribution { margin: 16px 2px 0; color: var(--muted); font-size: 10.5px; }
 .osm-attribution a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 
+/* ── Swipeable photos/videos on a post ── */
+.post-media-track { position: absolute; inset: 0; display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.post-media-track::-webkit-scrollbar { display: none; }
+.post-media-item { flex: 0 0 100%; width: 100%; height: 100%; object-fit: cover; scroll-snap-align: center; scroll-snap-stop: always; background: #1f2a22; }
+img.post-media-item { filter: saturate(.8) sepia(.06); }
+.post-media-count { position: absolute; z-index: 3; top: 10px; right: 10px; padding: 4px 9px; border-radius: 20px; background: rgba(23,35,27,.6); color: #fffaf0; font-family: "Inter:Semi Bold"; font-size: 11px; pointer-events: none; }
+.post-media-dots { position: absolute; z-index: 3; left: 0; right: 0; bottom: 48px; display: flex; justify-content: center; gap: 5px; pointer-events: none; }
+.post-media-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,250,240,.55); transition: background .2s ease, transform .2s ease; }
+.post-media-dots span.active { background: #fffaf0; transform: scale(1.2); }
+.post-media-arrow {
+  position: absolute; z-index: 3; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border: 0; border-radius: 50%;
+  background: rgba(255,250,240,.88); color: var(--forest); font-size: 22px; line-height: 1; display: none; place-items: center; cursor: pointer;
+}
+.post-media-arrow.prev { left: 8px; }
+.post-media-arrow.next { right: 8px; }
+@media (hover: hover) and (pointer: fine) { .post-media-arrow { display: grid; } }
+
+/* ── Empty states ── */
+.feed-empty-start { margin-top: 48px; }
+.feed-empty-start img { width: 150px; transform: none; opacity: 1; }
+.feed-empty-start h2 { font-size: 22px; }
+.feed-empty-start p { font-size: 15px; }
+.profile-empty-cashew { width: 120px; height: auto; margin-bottom: 4px; }
+.accom-note { padding: 16px 16px 0; }
+
+/* ── Friend rows: the person is a link to their profile ── */
+.profile-friend-row > button.profile-friend-person {
+  flex: 1; min-width: 0; min-height: 66px; display: flex; align-items: center; gap: 11px;
+  padding: 0; border: 0; border-radius: 0; background: transparent; text-align: left; font-size: inherit;
+}
+.profile-friend-avatar { overflow: hidden; }
+.profile-friend-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Log a hike: required photos/videos ── */
+.required-mark { margin-left: 6px; padding: 2px 7px; border-radius: 10px; background: #f8dfa6; color: #6f4a14; font-family: "Inter:Semi Bold"; font-size: 10px; vertical-align: middle; }
+.photo-preview { position: relative; padding: 0; border: 0; border-radius: 15px; overflow: hidden; aspect-ratio: 1/1; background: #1f2a22; cursor: pointer; }
+.photo-preview img, .photo-preview video { width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 0; }
+.photo-preview i { position: absolute; left: 8px; bottom: 6px; color: #fffaf0; font-style: normal; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.photo-remove { position: absolute; top: 5px; right: 5px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: rgba(23,35,27,.65); color: #fffaf0; font-size: 15px; line-height: 1; }
+.media-note { margin: 8px 2px 0; color: #a83f2a; font-size: 12px; }
+
+/* ── Profile grid: videos and multi-photo posts ── */
+.profile-grid-tile video { width: 100%; height: 100%; display: block; object-fit: cover; }
+.profile-grid-multi, .profile-grid-play { position: absolute; top: 6px; right: 7px; color: #fffaf0; font-style: normal; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.55); pointer-events: none; }
+.profile-grid-play { right: auto; left: 7px; }
+
+/* ── Settings: sign out sits under everything else ── */
+.settings-signout { display: block; width: 100%; margin-top: 28px; }
+

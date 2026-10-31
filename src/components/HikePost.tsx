@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { usePosts } from "../context/PostsContext";
 import { useUsers } from "../context/UsersContext";
-import type { FeedPost, Friend, PostComment } from "../data/feedPosts";
+import type { FeedPost, Friend, Media } from "../types";
 
 function HeartIcon({ filled }: { filled: boolean }) {
   return (
@@ -34,19 +35,51 @@ function Avatar({ person, className }: { person: Friend; className: string }) {
   );
 }
 
-// Like, comment and save handlers for a post, shared by every screen that shows full posts
-export function postActions(post: FeedPost, onUpdatePost: (id: string, update: (post: FeedPost) => FeedPost) => void) {
-  return {
-    onAddComment: (comment: PostComment) =>
-      onUpdatePost(post.id, (current) => ({ ...current, comments: [...current.comments, comment] })),
-    onToggleLike: () =>
-      onUpdatePost(post.id, (current) => ({
-        ...current,
-        liked: !current.liked,
-        likes: current.likes + (current.liked ? -1 : 1),
-      })),
-    onToggleSave: () => onUpdatePost(post.id, (current) => ({ ...current, saved: !current.saved })),
+// Swipeable photos/videos: native horizontal scrolling that snaps to each item, with dots
+// and a "2/5" counter. Arrow buttons appear on wider screens where swiping isn't natural.
+function MediaCarousel({ media, label }: { media: Media[]; label: string }) {
+  const track = useRef<HTMLDivElement>(null);
+  const [index, setIndex] = useState(0);
+  const scrollTo = (next: number) => {
+    const element = track.current;
+    if (element) element.scrollTo({ left: next * element.clientWidth, behavior: "smooth" });
   };
+  return (
+    <>
+      <div
+        aria-label={media.length > 1 ? `${label}, ${media.length} photos and videos` : label}
+        className="post-media-track"
+        onScroll={(event) => {
+          const element = event.currentTarget;
+          setIndex(Math.round(element.scrollLeft / element.clientWidth));
+        }}
+        ref={track}
+        role="group"
+      >
+        {media.map((item, i) =>
+          item.type === "video" ? (
+            <video className="post-media-item" controls key={item.url} playsInline preload="metadata" src={item.url} />
+          ) : (
+            <img alt={i === 0 ? label : ""} className="post-media-item" draggable={false} key={item.url} src={item.url} />
+          ),
+        )}
+      </div>
+      {media.length > 1 && (
+        <>
+          <span className="post-media-count">{index + 1}/{media.length}</span>
+          {index > 0 && (
+            <button aria-label="Previous photo" className="post-media-arrow prev" onClick={() => scrollTo(index - 1)} type="button">‹</button>
+          )}
+          {index < media.length - 1 && (
+            <button aria-label="Next photo" className="post-media-arrow next" onClick={() => scrollTo(index + 1)} type="button">›</button>
+          )}
+          <div aria-hidden="true" className="post-media-dots">
+            {media.map((item, i) => <span className={i === index ? "active" : ""} key={item.url} />)}
+          </div>
+        </>
+      )}
+    </>
+  );
 }
 
 function formatDate(date: string) {
@@ -57,21 +90,14 @@ function plural(count: number, word: string) {
   return `${count.toLocaleString()} ${word}${count === 1 ? "" : "s"}`;
 }
 
-export default function HikePost({
-  post,
-  onToggleLike,
-  onToggleSave,
-  onAddComment,
-}: {
-  post: FeedPost;
-  onToggleLike: () => void;
-  onToggleSave: () => void;
-  onAddComment: (comment: PostComment) => void;
-}) {
+export default function HikePost({ post }: { post: FeedPost }) {
   const [showComments, setShowComments] = useState(false);
   const [draft, setDraft] = useState("");
   const [burst, setBurst] = useState(0);
+  const [commentError, setCommentError] = useState("");
   const { currentUser, getUser, getRank, openProfile } = useUsers();
+  const { toggleLike, toggleSave, addComment } = usePosts();
+  const onToggleLike = () => toggleLike(post.id);
   const { friend, trail } = post;
   // The poster's own ranking, read live so it follows any later re-ranking
   const rank = getRank(friend.id, trail.name);
@@ -81,8 +107,13 @@ export default function HikePost({
     event.preventDefault();
     const text = draft.trim();
     if (!text) return;
-    onAddComment({ id: `c-${Date.now()}`, authorId: currentUser.id, text });
     setDraft("");
+    setCommentError("");
+    addComment(post.id, text).catch((error) => {
+      console.error("Couldn't post comment", error);
+      setDraft(text);
+      setCommentError("Couldn't post your comment. Try again?");
+    });
   };
 
   // Double-tap the photo to like (never unlikes), like Instagram.
@@ -108,7 +139,7 @@ export default function HikePost({
       </header>
 
       <div className="post-photo" onDoubleClick={likeFromPhoto}>
-        <img alt={`${friend.name} on ${trail.name}`} draggable={false} src={post.image} />
+        <MediaCarousel label={`${friend.name} on ${trail.name}`} media={post.media} />
         {rank !== null && (
           <span className="post-rank-tag">
             <b>#{rank}</b> on {mountainOwner} mountain
@@ -151,7 +182,7 @@ export default function HikePost({
           aria-label={post.saved ? "Unsave hike" : "Save hike"}
           aria-pressed={post.saved}
           className={`post-action save ${post.saved ? "saved" : ""}`}
-          onClick={onToggleSave}
+          onClick={() => toggleSave(post.id)}
           type="button"
         >
           <BookmarkIcon filled={post.saved} />
@@ -169,6 +200,7 @@ export default function HikePost({
           <button className="profile-link" onClick={() => openProfile(friend.id)} type="button">
             <b>{friend.username}</b>
           </button>
+          {/* Just the username when there's no caption; nothing is made up */}
           {post.caption}
         </p>
 
@@ -204,6 +236,7 @@ export default function HikePost({
               />
               <button disabled={!draft.trim()} type="submit">Post</button>
             </form>
+            {commentError && <p className="post-comment empty" role="alert">{commentError}</p>}
           </div>
         )}
       </div>
