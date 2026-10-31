@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { trailPlaceholder } from "./trailArt";
-import type { Difficulty, Trail } from "../data/trails";
+import type { Difficulty, Trail } from "../types";
 
 // Columns can be numbers or (before 002_save_hikes.sql) text like "4.2 mi", so read both
 type TrailRow = {

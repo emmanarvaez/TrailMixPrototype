@@ -1,21 +1,37 @@
 import { useState } from "react";
-import HikePost, { postActions } from "./HikePost";
-import type { FeedPost } from "../data/feedPosts";
+import HikePost from "./HikePost";
+import type { FeedPost } from "../types";
 
 export default function Feed({
   posts,
-  onUpdatePost,
+  loadError,
+  onFindFriends,
 }: {
-  posts: FeedPost[];
-  onUpdatePost: (id: string, update: (post: FeedPost) => FeedPost) => void;
+  posts: FeedPost[] | null; // null while loading
+  loadError: string;
+  onFindFriends: () => void;
 }) {
   const [query, setQuery] = useState("");
   const search = query.trim().toLowerCase();
+  const allPosts = posts ?? [];
   const visiblePosts = search
-    ? posts.filter((post) =>
+    ? allPosts.filter((post) =>
         [post.trail.name, post.friend.name, post.friend.username].some((value) => value.toLowerCase().includes(search)),
       )
-    : posts;
+    : allPosts;
+
+  if (posts !== null && posts.length === 0 && !loadError) {
+    return (
+      <section className="screen-content feed-screen">
+        <div className="feed-empty feed-empty-start">
+          <img alt="" src="/assets/cashew-11-sleepy.svg" />
+          <h2>No hikes yet!</h2>
+          <p>Add friends to see where they're hiking.</p>
+          <button onClick={onFindFriends} type="button">Find friends</button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="screen-content feed-screen">
@@ -37,20 +53,21 @@ export default function Feed({
         <span>{visiblePosts.length} {visiblePosts.length === 1 ? "hike" : "hikes"}</span>
       </div>
 
+      {loadError && <p className="trail-search-note" role="alert">Couldn't load the feed: {loadError}</p>}
+      {!loadError && posts === null && <p className="trail-search-note">Loading hikes…</p>}
+
       {visiblePosts.length > 0 ? (
         <div className="feed-list">
-          {visiblePosts.map((post) => (
-            <HikePost key={post.id} post={post} {...postActions(post, onUpdatePost)} />
-          ))}
+          {visiblePosts.map((post) => <HikePost key={post.id} post={post} />)}
         </div>
-      ) : (
+      ) : search ? (
         <div className="feed-empty">
           <img alt="" src="/assets/cashew.svg" />
           <h2>No hikes found</h2>
           <p>None of your friends have logged a hike matching “{query.trim()}” yet.</p>
           <button onClick={() => setQuery("")} type="button">Clear search</button>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

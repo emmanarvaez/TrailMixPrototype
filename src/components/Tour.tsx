@@ -173,7 +173,7 @@ export default function Tour({
       )}
 
       {!step.target && (
-        <div className="tour-center" key={index}>
+        <div className="tour-center" key={`center-${index}`}>
           <div aria-live="polite" className="tour-bubble">
             {step.text}
             {!isLast && <small>Tap anywhere to continue</small>}
@@ -192,10 +192,11 @@ export default function Tour({
         </div>
       )}
 
-      {callout && (
+      {/* step.target too: the previous step's target can linger for a frame */}
+      {callout && step.target && (
         <div
           className={`tour-callout ${callout.placement} mascot-${callout.mascotSide}`}
-          key={index}
+          key={`callout-${index}`}
           style={callout.style}
         >
           <img alt="Cashew the squirrel" className="tour-mascot" src={poses[step.pose]} />

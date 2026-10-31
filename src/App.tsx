@@ -1,17 +1,29 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
 import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
-import HikePost, { postActions } from "./components/HikePost";
+import FindFriends from "./components/FindFriends";
+import HikePost from "./components/HikePost";
 import MountainScene from "./components/MountainScene";
 import Tour from "./components/Tour";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
+import { PostsContext, usePostsStore } from "./context/PostsContext";
 import { UsersContext, profileFromAuth } from "./context/UsersContext";
+import {
+  MAX_MEDIA,
+  fetchFollowing,
+  fetchMyLogs,
+  fetchProfiles,
+  fetchRankings,
+  fetchUnlockedIngredients,
+  saveHikeLog,
+  saveRanking,
+  setFollowing,
+} from "./lib/db";
 import { supabase } from "./lib/supabase";
 import { searchTrails } from "./lib/trails";
-import { friends, initialFeedPosts, mockRankings, type FeedPost, type Friend } from "./data/feedPosts";
-import { trailPhotos, trails, type Trail } from "./data/trails";
+import type { Friend, HikeLog, Trail } from "./types";
 
 const detailOptions = [
   { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
@@ -33,8 +45,6 @@ const ratings = [
   { label: "It was fine", icon: "●", color: "#d5a23e" },
   { label: "Not for me", icon: "−", color: "#6e8370" },
 ];
-
-const availableFriends = ["Caine", "Kaylee", "Oscar", "Amanda", "Emma"];
 
 type MascotVariant =
   | "default" | "loved-it" | "its-fine" | "not-for-me" | "thinking"
@@ -74,39 +84,41 @@ function getResultVariant(rank: number, total: number): MascotVariant {
   return "not-for-me";
 }
 
-// Ingredients unlocked before this hike (one per previously completed hike).
-// Index UNLOCKED_COUNT is the ingredient this hike unlocks.
-const UNLOCKED_COUNT = 7;
+// New users start with the first few ingredients; each logged hike unlocks the next one
+// (saved to user_ingredients, keyed by detailOptions[i].shape).
+const STARTER_INGREDIENTS = 3;
 
-type HikeRecord = {
-  date: string;
-  rating: "Loved it!" | "It was fine" | "Not for me";
-  difficulty: number;
-  caption: string;
-  ingredients: number[];
-};
+function unlockedIndexes(unlockedKeys: string[]): Set<number> {
+  const unlocked = new Set<number>();
+  detailOptions.forEach((option, index) => {
+    if (index < STARTER_INGREDIENTS || unlockedKeys.includes(option.shape)) unlocked.add(index);
+  });
+  return unlocked;
+}
 
-const hikeDetails: Record<string, HikeRecord> = {
-  "Holy Jim Falls":          { date: "Oct 14, 2026", rating: "Loved it!",   difficulty: 3, caption: "Worth every steep mile.",         ingredients: [0, 2] },
-  "Top of the World":        { date: "Oct 8, 2026",  rating: "Loved it!",   difficulty: 2, caption: "Views were insane.",               ingredients: [0, 1, 3] },
-  "Bommer Canyon Loop":      { date: "Oct 7, 2026",  rating: "Loved it!",   difficulty: 1, caption: "Quick morning loop.",              ingredients: [0] },
-  "Crystal Cove Moro Ridge": { date: "Sep 30, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [4, 5] },
-  "Peters Canyon Loop":      { date: "Sep 22, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [1, 2] },
-  "Quail Hill Trail":        { date: "Sep 15, 2026", rating: "It was fine", difficulty: 1, caption: "Easy and beautiful.",              ingredients: [5] },
-  "Black Star Canyon":       { date: "Sep 1, 2026",  rating: "Loved it!",   difficulty: 3, caption: "Spooky and stunning.",             ingredients: [0, 3] },
-  "Buck Gully Trail":        { date: "Aug 25, 2026", rating: "Not for me",  difficulty: 2, caption: "Too crowded.",                     ingredients: [4] },
-  "Laguna Coast Loop":       { date: "Aug 18, 2026", rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [2] },
-  "Santiago Oaks":           { date: "Aug 10, 2026", rating: "Loved it!",   difficulty: 2, caption: "Great for a hot day.",             ingredients: [6] },
-  "Moro Canyon Trail":       { date: "Aug 4, 2026",  rating: "It was fine", difficulty: 2, caption: "",                                 ingredients: [0, 1] },
-  "Red Rock Canyon":         { date: "Jul 28, 2026", rating: "Loved it!",   difficulty: 3, caption: "Gorgeous rock formations.",        ingredients: [3, 5] },
-};
+function nextUnlockIndex(unlockedKeys: string[]): number | null {
+  const unlocked = unlockedIndexes(unlockedKeys);
+  const index = detailOptions.findIndex((_, i) => !unlocked.has(i));
+  return index === -1 ? null : index;
+}
 
-const ingredientCategories: { label: string; indices: number[] }[] = [
-  { label: "Sweet",        indices: [0] },
-  { label: "Dried Fruit",  indices: [1, 3, 6, 7, 8] },
-  { label: "Nuts & Seeds", indices: [2, 5, 11] },
-  { label: "Crunchy",      indices: [4, 9, 10] },
-];
+// Shapes of the ingredients picked on each hike
+function hikeShapes(logs: HikeLog[]): string[] {
+  return logs.flatMap((log) =>
+    log.highlights.map((label) => detailOptions.find((option) => option.label === label)?.shape).filter((shape): shape is string => !!shape),
+  );
+}
+
+// The jar fills up as ingredients are picked (17 piece positions in the CSS); empty for a new user
+function buildJarMix(shapes: string[]): string[] {
+  if (shapes.length === 0) return [];
+  return Array.from({ length: Math.min(17, shapes.length * 3) }, (_, i) => shapes[i % shapes.length]);
+}
+
+function formatHikeDate(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 function GlobalStyles() {
   return (
@@ -746,15 +758,18 @@ function Mascot({
   trail,
   rank,
   ingredient,
+  line: fixedLine,
 }: {
   variant: MascotVariant;
   small?: boolean;
   trail?: string;
   rank?: number;
   ingredient?: string;
+  line?: string; // say this instead of a random line
 }) {
   const data = mascotData[variant];
-  const [line] = useState(() => applyVars(pickRandom(data.lines), { trail, rank, ingredient }));
+  const [randomLine] = useState(() => applyVars(pickRandom(data.lines), { trail, rank, ingredient }));
+  const line = fixedLine ?? randomLine;
   const size = small ? 144 : 144;
   return (
     <div className="mascot-prompt">
@@ -897,7 +912,7 @@ function RateTrail({
       <section className="screen-content rate-screen">
         <div className="hero-photo">
           <img alt={`View from ${trail.name}`} src={trail.image} />
-          <span className="photo-sticker">Yesterday · Laguna Beach</span>
+          <span className="photo-sticker">Today · {trail.area ?? "Orange County"}</span>
           <svg className="photo-sun" viewBox="0 0 100 100"><circle cx="50" cy="50" r="31" /></svg>
         </div>
         <div className="screen-title compact">
@@ -1118,44 +1133,76 @@ function RankTrail({
 }
 
 function AddDetails({
+  trailName,
+  unlocked,
   selectedDetails,
   setSelectedDetails,
+  media,
+  setMedia,
   caption,
   setCaption,
-  taggedFriends,
-  setTaggedFriends,
+  friends,
+  taggedIds,
+  setTaggedIds,
+  saving,
+  saveError,
   onSave,
   onBack,
 }: {
+  trailName: string;
+  unlocked: Set<number>;
   selectedDetails: number[];
   setSelectedDetails: (indexes: number[]) => void;
+  media: File[];
+  setMedia: React.Dispatch<React.SetStateAction<File[]>>;
   caption: string;
   setCaption: (caption: string) => void;
-  taggedFriends: string[];
-  setTaggedFriends: React.Dispatch<React.SetStateAction<string[]>>;
+  friends: Friend[]; // people the user follows, who can be tagged
+  taggedIds: string[];
+  setTaggedIds: React.Dispatch<React.SetStateAction<string[]>>;
+  saving: boolean;
+  saveError: string;
   onSave: () => void;
   onBack: () => void;
 }) {
-  const [added, setAdded] = useState(false);
+  const mediaInput = useRef<HTMLInputElement>(null);
+  const [mediaNote, setMediaNote] = useState("");
+  const previews = useMemo(
+    () => media.map((file) => ({ url: URL.createObjectURL(file), isVideo: file.type.startsWith("video/") })),
+    [media],
+  );
+  useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)), [previews]);
   const [friend, setFriend] = useState("");
-  const friendSuggestions = friend.trim()
-    ? availableFriends.filter(
-        (name) =>
-          name.toLowerCase().includes(friend.trim().toLowerCase()) &&
-          !taggedFriends.includes(name),
+  const query = friend.trim().toLowerCase();
+  const friendSuggestions = query
+    ? friends.filter(
+        (person) =>
+          `${person.name} ${person.username}`.toLowerCase().includes(query) && !taggedIds.includes(person.id),
       )
     : [];
+  const taggedFriends = taggedIds.map((id) => friends.find((person) => person.id === id)).filter((person): person is Friend => !!person);
 
-  const tagFriend = (name: string) => {
-    setTaggedFriends((current) => [...current, name]);
+  const tagFriend = (person: Friend) => {
+    setTaggedIds((current) => [...current, person.id]);
     setFriend("");
   };
+
+  const addMedia = (files: File[]) => {
+    const usable = files.filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
+    const room = MAX_MEDIA - media.length;
+    if (usable.length < files.length) setMediaNote("Only photos and videos can be added.");
+    else if (usable.length > room) setMediaNote(`You can add up to ${MAX_MEDIA} photos or videos.`);
+    else setMediaNote("");
+    setMedia((current) => [...current, ...usable.slice(0, room)]);
+  };
+
+  const missing = media.length === 0 ? "Add at least one photo or video to post your hike." : "";
 
   return (
     <Shell onBack={onBack} step={4}>
       <section className="screen-content details-screen">
         <div className="screen-title compact">
-          <span className="eyebrow">Bommer Canyon Loop</span>
+          <span className="eyebrow">{trailName}</span>
           <h1>Add details</h1>
         </div>
         <div className="field-group">
@@ -1167,7 +1214,7 @@ function AddDetails({
           {/* Change 4 + 5: bigger vertical chips, locked state */}
           <div className="detail-grid">
             {detailOptions.map((option, index) => {
-              const isLocked = index >= UNLOCKED_COUNT;
+              const isLocked = !unlocked.has(index);
               const isSelected = selectedDetails.includes(index);
               return (
                 <button
@@ -1205,12 +1252,42 @@ function AddDetails({
           />
         )}
         <div className="field-group">
-          <div className="section-heading"><h2>Photos</h2><span>2 added</span></div>
-          <div className="photo-row">
-            <button className="add-photo" onClick={() => setAdded(true)}><span>+</span><small>{added ? "Added" : "Add"}</small></button>
-            <img alt="Bommer Canyon view" src={trailPhotos[0]} />
-            <img alt="Trail at sunset" src={trailPhotos[1]} />
+          <div className="section-heading">
+            <h2>Photos &amp; videos <span className="required-mark">Required</span></h2>
+            <span>{media.length} of {MAX_MEDIA}</span>
           </div>
+          <div className="photo-row">
+            {media.length < MAX_MEDIA && (
+              <button className="add-photo" onClick={() => mediaInput.current?.click()} type="button">
+                <span>+</span><small>Add</small>
+              </button>
+            )}
+            <input
+              accept="image/*,video/*"
+              hidden
+              multiple
+              onChange={(event) => {
+                addMedia(Array.from(event.target.files ?? []));
+                event.target.value = "";
+              }}
+              ref={mediaInput}
+              type="file"
+            />
+            {previews.map((preview, index) => (
+              <button
+                aria-label={`Remove ${preview.isVideo ? "video" : "photo"} ${index + 1}`}
+                className="photo-preview"
+                key={preview.url}
+                onClick={() => { setMedia((current) => current.filter((_, i) => i !== index)); setMediaNote(""); }}
+                type="button"
+              >
+                {preview.isVideo ? <video muted playsInline preload="metadata" src={preview.url} /> : <img alt="" src={preview.url} />}
+                {preview.isVideo && <i aria-hidden="true">▶</i>}
+                <span aria-hidden="true" className="photo-remove">×</span>
+              </button>
+            ))}
+          </div>
+          {(mediaNote || missing) && <p className="media-note">{mediaNote || missing}</p>}
         </div>
         <label className="text-field">
           <span>Caption</span>
@@ -1231,16 +1308,16 @@ function AddDetails({
                   tagFriend(friendSuggestions[0]);
                 }
               }}
-              placeholder="Search friends"
+              placeholder={friends.length ? "Search friends" : "Add friends to tag them in hikes"}
               value={friend}
             />
           </div>
-          {friend.trim() && (
+          {query && (
             <div className="friend-results">
-              {friendSuggestions.length ? friendSuggestions.map((name) => (
-                <button key={name} onClick={() => tagFriend(name)} type="button">
-                  <span className="friend-avatar">{name.charAt(0)}</span>
-                  <span><b>{name}</b><small>@{name.toLowerCase()}</small></span>
+              {friendSuggestions.length ? friendSuggestions.map((person) => (
+                <button key={person.id} onClick={() => tagFriend(person)} type="button">
+                  <span className="friend-avatar" style={{ background: person.color }}>{person.name.charAt(0).toUpperCase()}</span>
+                  <span><b>{person.name}</b><small>@{person.username}</small></span>
                   <i>+</i>
                 </button>
               )) : (
@@ -1250,25 +1327,34 @@ function AddDetails({
           )}
           {taggedFriends.length > 0 && (
             <div className="tagged-friends">
-              {taggedFriends.map((name) => (
+              {taggedFriends.map((person) => (
                 <button
-                  aria-label={`Remove ${name}`}
+                  aria-label={`Remove ${person.name}`}
                   className="friend-chip"
-                  key={name}
-                  onClick={() => setTaggedFriends((current) => current.filter((n) => n !== name))}
+                  key={person.id}
+                  onClick={() => setTaggedIds((current) => current.filter((id) => id !== person.id))}
                   type="button"
                 >
-                  <span className="chip-avatar">{name.charAt(0)}</span>
-                  {name}
+                  <span className="chip-avatar">{person.name.charAt(0).toUpperCase()}</span>
+                  {person.name}
                   <span aria-hidden="true" className="chip-remove">×</span>
                 </button>
               ))}
             </div>
           )}
         </div>
+        {saving && <Mascot variant="stuffed-cheeks" />}
+        {!saving && saveError && (
+          <>
+            <Mascot key={saveError} variant="oops" />
+            <p className="auth-error" role="alert">{saveError}</p>
+          </>
+        )}
       </section>
       <div className="sticky-action">
-        <Button disabled={selectedDetails.length === 0} onClick={onSave}>Save</Button>
+        <Button disabled={selectedDetails.length === 0 || media.length === 0 || saving} onClick={onSave}>
+          {saving ? "Saving…" : "Save"}
+        </Button>
       </div>
     </Shell>
   );
@@ -1302,26 +1388,28 @@ function Result({
   trail,
   ranking,
   lowerRanking,
+  previousShapes,
+  unlockIndex,
+  jarOwner,
+  isFirstHike,
   onRestart,
-  onBack,
 }: {
   rank: number;
   details: number[];
   trail: Trail;
   ranking: string[];
   lowerRanking: string[];
+  previousShapes: string[]; // ingredients from the user's earlier hikes, already in the jar
+  unlockIndex: number | null; // ingredient this hike unlocked, if any
+  jarOwner: string;
+  isFirstHike: boolean;
   onRestart: () => void;
-  onBack: () => void;
 }) {
   const choices = details.map((detail) => detailOptions[detail]);
-  const mix = useMemo(() => [
-    "almonds", "cranberries", "pretzel", "chocolate", "cashew", "dried-fruit",
-    "nuts", "almonds", "cranberries", "cashew", "pretzel", "chocolate",
-    "dried-fruit", "nuts", "almonds", "cashew", "pretzel",
-  ], []);
+  const mix = useMemo(() => buildJarMix(previousShapes), [previousShapes]);
 
-  // Change 7: newly unlocked ingredient (UNLOCKED_COUNT is the index now unlocked)
-  const newlyUnlocked = detailOptions[UNLOCKED_COUNT];
+  // Change 7: newly unlocked ingredient (none once everything is unlocked)
+  const newlyUnlocked = unlockIndex !== null ? detailOptions[unlockIndex] : null;
 
   // Stats
   const totalHikes = ranking.length + lowerRanking.length;
@@ -1335,7 +1423,8 @@ function Result({
   const rankingsRef = useRef<HTMLDivElement>(null);
 
   return (
-    <Shell onBack={onBack} step={5}>
+    // No back button: the hike is already saved, so going back could only post it twice
+    <Shell step={5}>
       <section className="screen-content result-screen">
         <div className="result-copy">
           <span className="eyebrow">Hike logged</span>
@@ -1359,7 +1448,7 @@ function Result({
                 <Ingredient className={`new-piece new-piece-${index % 3}`} key={choice.ingredient} type={choice.shape} />
               ))}
             </div>
-            <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>Alex's jar</small></div>
+            <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>{jarOwner}'s jar</small></div>
           </div>
           <div className="ground-shadow" />
         </div>
@@ -1370,20 +1459,23 @@ function Result({
         </div>
         <Mascot
           ingredient={choices[0]?.ingredient}
+          line={isFirstHike ? `Your first summit! ${trail.name} is your #1.` : undefined}
           rank={rank}
           trail={trail.name}
-          variant={resultVariant}
+          variant={isFirstHike ? "summit" : resultVariant}
         />
 
         {/* Change 7: newly unlocked ingredient */}
-        <div className="new-unlock-row">
-          <img alt={newlyUnlocked.ingredient} className="new-unlock-img" src={newlyUnlocked.icon} />
-          <div className="new-unlock-copy">
-            <small>New ingredient unlocked</small>
-            <b>{newlyUnlocked.ingredient}</b>
-            <span>for {newlyUnlocked.label.toLowerCase()} on the trail</span>
+        {newlyUnlocked && (
+          <div className="new-unlock-row">
+            <img alt={newlyUnlocked.ingredient} className="new-unlock-img" src={newlyUnlocked.icon} />
+            <div className="new-unlock-copy">
+              <small>New ingredient unlocked</small>
+              <b>{newlyUnlocked.ingredient}</b>
+              <span>for {newlyUnlocked.label.toLowerCase()} on the trail</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Change 7: quick stats */}
         <div className="result-stats-row">
@@ -1429,13 +1521,22 @@ function Result({
   );
 }
 
+const ratingColor = (r: string) =>
+  r === "Loved it!" ? "#e25e3f" : r === "Not for me" ? "#6e8370" : "#d5a23e";
+const ratingIcon = (r: string) =>
+  r === "Loved it!" ? "♥" : r === "Not for me" ? "−" : "●";
+
 function AccomplishmentsMountain({
   ranking,
+  logsByTrail,
   setRanking,
+  onDrop,
   onSelectHike,
 }: {
   ranking: string[];
+  logsByTrail: Map<string, HikeLog>;
   setRanking: (r: string[]) => void;
+  onDrop: () => void; // a drag finished: save the new order
   onSelectHike: (name: string) => void;
 }) {
   const draggingIndex = useRef<number | null>(null);
@@ -1460,17 +1561,12 @@ function AccomplishmentsMountain({
     }
   };
 
-  const ratingColor = (r: string) =>
-    r === "Loved it!" ? "#e25e3f" : r === "Not for me" ? "#6e8370" : "#d5a23e";
-  const ratingIcon = (r: string) =>
-    r === "Loved it!" ? "♥" : r === "Not for me" ? "−" : "●";
-
   return (
     <div>
       <MountainScene ranking={ranking} />
       <div className="accom-rank-list-section">
         {ranking.map((name, index) => {
-          const hike = hikeDetails[name];
+          const hike = logsByTrail.get(name);
           return (
             <div
               className={`accom-rank-item ${dragPos === index ? "dragging" : ""}`}
@@ -1488,13 +1584,14 @@ function AccomplishmentsMountain({
                 draggingIndex.current = null;
                 setDragPos(null);
                 if (isTap) onSelectHike(name);
+                else onDrop();
               }}
             >
               <span className="ar-num">#{index + 1}</span>
               <span className="ar-name">{name}</span>
-              {hike && (
-                <span className="ar-rating" style={{ color: ratingColor(hike.rating) }}>
-                  {ratingIcon(hike.rating)}
+              {hike?.reaction && (
+                <span className="ar-rating" style={{ color: ratingColor(hike.reaction) }}>
+                  {ratingIcon(hike.reaction)}
                 </span>
               )}
               <span className="ar-drag">⠿</span>
@@ -1507,37 +1604,43 @@ function AccomplishmentsMountain({
 }
 
 function Accomplishments({
+  logs,
+  ranking,
+  unlockedKeys,
+  loadError,
+  onReorder,
+  onSaveOrder,
   onLogHike,
-  accomRanking,
-  setAccomRanking,
 }: {
+  logs: HikeLog[] | null; // all of the user's hikes; null while loading
+  ranking: string[]; // their mountain, #1 first
+  unlockedKeys: string[];
+  loadError: string;
+  onReorder: (ranking: string[]) => void;
+  onSaveOrder: () => void;
   onLogHike: () => void;
-  accomRanking: string[];
-  setAccomRanking: (ranking: string[]) => void;
 }) {
   const [subTab, setSubTab] = useState<"mountain" | "trailmix">("mountain");
   const [selectedHike, setSelectedHike] = useState<string | null>(null);
   const [selectedIngredient, setSelectedIngredient] = useState<number | null>(null);
 
-  const totalHikes = accomRanking.length;
-  const topHike = accomRanking[0];
+  const allLogs = logs ?? [];
+  // The log that holds each trail's place on the mountain
+  const logsByTrail = useMemo(
+    () => new Map(allLogs.filter((log) => log.rank !== null).map((log) => [log.trailName, log])),
+    [allLogs],
+  );
+  const unlocked = unlockedIndexes(unlockedKeys);
+  const totalHikes = allLogs.length;
+  const totalMiles = allLogs.reduce((sum, log) => sum + log.miles, 0);
+  const topHike = ranking[0] ?? "—";
 
   const hikesForIngredient = (idx: number) =>
-    Object.entries(hikeDetails)
-      .filter(([, data]) => data.ingredients.includes(idx))
-      .map(([name]) => name);
+    allLogs.filter((log) => log.highlights.includes(detailOptions[idx].label));
 
-  const jarMix = useMemo(() => {
-    const types = detailOptions.slice(0, UNLOCKED_COUNT).map((d) => d.shape);
-    return Array.from({ length: 17 }, (_, i) => types[i % types.length]);
-  }, []);
+  const jarMix = useMemo(() => buildJarMix(hikeShapes(allLogs)), [allLogs]);
 
-  const selectedHikeData = selectedHike ? hikeDetails[selectedHike] : null;
-  const diffLabel = (d: number) => ["Easy", "Moderate", "Tough"][d - 1];
-  const ratingColor = (r: string) =>
-    r === "Loved it!" ? "#e25e3f" : r === "Not for me" ? "#6e8370" : "#d5a23e";
-  const ratingIcon = (r: string) =>
-    r === "Loved it!" ? "♥" : r === "Not for me" ? "−" : "●";
+  const selectedHikeData = selectedHike ? logsByTrail.get(selectedHike) ?? null : null;
 
   return (
     <section className="screen-content accomplishments-screen">
@@ -1549,11 +1652,11 @@ function Accomplishments({
             <small>hikes</small>
           </div>
           <div className="accom-stat">
-            <b>47.2 mi</b>
+            <b>{totalMiles.toFixed(1)} mi</b>
             <small>miles</small>
           </div>
           <div className="accom-stat">
-            <b>{UNLOCKED_COUNT} of {detailOptions.length}</b>
+            <b>{unlocked.size}/{detailOptions.length}</b>
             <small>ingredients</small>
           </div>
           <div className="accom-stat" style={{ flex: 2, minWidth: 0 }}>
@@ -1580,27 +1683,36 @@ function Accomplishments({
         </div>
       </div>
 
-      {subTab === "mountain" && (
-        totalHikes === 0 ? (
+      {loadError && <p className="trail-search-note accom-note" role="alert">Couldn't load your hikes: {loadError}</p>}
+      {!loadError && logs === null && <p className="trail-search-note accom-note">Loading your hikes…</p>}
+
+      {logs !== null && subTab === "mountain" && (
+        ranking.length === 0 ? (
           <div className="accom-empty">
-            <Mascot variant="sleepy" />
+            <Mascot line="Your mountain is empty. Log your first hike to start climbing." variant="sleepy" />
             <button className="primary-button" onClick={onLogHike} type="button">
               Log a Hike →
             </button>
           </div>
         ) : (
           <AccomplishmentsMountain
+            logsByTrail={logsByTrail}
+            onDrop={onSaveOrder}
             onSelectHike={setSelectedHike}
-            ranking={accomRanking}
-            setRanking={setAccomRanking}
+            ranking={ranking}
+            setRanking={onReorder}
           />
         )
       )}
 
-      {subTab === "trailmix" && (
+      {logs !== null && subTab === "trailmix" && (
         <div>
           <div style={{ display: "flex", justifyContent: "center", padding: "16px 16px 0" }}>
-            <Mascot variant="celebrate" />
+            {jarMix.length === 0 ? (
+              <Mascot key="empty-jar" line="Your jar is empty. Every hike adds an ingredient!" variant="sleepy" />
+            ) : (
+              <Mascot key="jar" variant="celebrate" />
+            )}
           </div>
           <div className="accom-jar-stage">
             <div className="jar-lid"><span /><span /><span /></div>
@@ -1618,7 +1730,7 @@ function Accomplishments({
           <div className="accom-ingredient-categories">
             <div className="accom-ingredient-grid">
               {detailOptions.map((opt, idx) => {
-                const isUnlocked = idx < UNLOCKED_COUNT;
+                const isUnlocked = unlocked.has(idx);
                 const hikeCount = hikesForIngredient(idx).length;
                 return (
                   <div
@@ -1649,22 +1761,30 @@ function Accomplishments({
             <div className="sheet-handle" />
             <h2>{selectedHike}</h2>
             <div className="sheet-meta">
-              #{accomRanking.indexOf(selectedHike) + 1} in your rankings · {selectedHikeData.date}
+              #{ranking.indexOf(selectedHike) + 1} in your rankings · {formatHikeDate(selectedHikeData.date)}
             </div>
-            <div className="sheet-detail-row">
-              <span className="sdr-label">Reaction</span>
-              <span style={{ color: ratingColor(selectedHikeData.rating), fontWeight: 600 }}>
-                {ratingIcon(selectedHikeData.rating)} {selectedHikeData.rating}
-              </span>
-            </div>
-            <div className="sheet-detail-row">
-              <span className="sdr-label">Difficulty</span>
-              <span>{diffLabel(selectedHikeData.difficulty)}</span>
-            </div>
-            {selectedHikeData.ingredients.length > 0 && (
+            {selectedHikeData.reaction && (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Reaction</span>
+                <span style={{ color: ratingColor(selectedHikeData.reaction), fontWeight: 600 }}>
+                  {ratingIcon(selectedHikeData.reaction)} {selectedHikeData.reaction}
+                </span>
+              </div>
+            )}
+            {selectedHikeData.difficulty && (
+              <div className="sheet-detail-row">
+                <span className="sdr-label">Difficulty</span>
+                <span>{selectedHikeData.difficulty}</span>
+              </div>
+            )}
+            {selectedHikeData.highlights.length > 0 && (
               <div className="sheet-detail-row">
                 <span className="sdr-label">Trail mix</span>
-                <span>{selectedHikeData.ingredients.map((i) => detailOptions[i].ingredient).join(", ")}</span>
+                <span>
+                  {selectedHikeData.highlights
+                    .map((label) => detailOptions.find((option) => option.label === label)?.ingredient ?? label)
+                    .join(", ")}
+                </span>
               </div>
             )}
             {selectedHikeData.caption ? (
@@ -1690,9 +1810,12 @@ function Accomplishments({
               Unlocked for {detailOptions[selectedIngredient].label.toLowerCase()} on the trail
             </div>
             <div className="ids-section-label">Hikes that added this</div>
-            {hikesForIngredient(selectedIngredient).map((name) => (
-              <div className="ids-hike-row" key={name}>{name}</div>
+            {hikesForIngredient(selectedIngredient).map((log) => (
+              <div className="ids-hike-row" key={log.id}>{log.trailName}</div>
             ))}
+            {hikesForIngredient(selectedIngredient).length === 0 && (
+              <div className="ids-hike-row">None yet. Pick it on your next hike!</div>
+            )}
             <button className="sheet-close-btn" onClick={() => setSelectedIngredient(null)} type="button">
               Done
             </button>
@@ -1705,32 +1828,37 @@ function Accomplishments({
 
 type View = { kind: "profile" | "post"; id: string; scrollY: number };
 
+// The user's mountain as trail names, #1 first, from their ranked hike logs
+function rankingFrom(logs: HikeLog[]): string[] {
+  return [...new Set(logs.filter((log) => log.rank !== null).sort((a, b) => a.rank! - b.rank!).map((log) => log.trailName))];
+}
+
+const message = (error: unknown) => (error as { message?: string })?.message ?? "Something went wrong.";
+
 export default function App() {
   document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
   const [showSettings, setShowSettings] = useState(false);
-  const [posts, setPosts] = useState<FeedPost[]>(initialFeedPosts);
   const [user, setUser] = useState<AuthUser | null>(null);
-  // Every profile we know about, by user ID. Signed-in accounts are added and
-  // kept here so their comments still resolve after someone else signs in.
-  const [users, setUsers] = useState<Record<string, Friend>>(() =>
-    Object.fromEntries(Object.values(friends).map((friend) => [friend.id, friend])),
-  );
-
+  const userId = user?.id ?? null;
+  // Every profile loaded so far (post authors, commenters, friends), by user ID
+  const [users, setUsers] = useState<Record<string, Friend>>({});
   // Only set by a successful sign-up, so returning users who sign in never see the tour
   const [showTour, setShowTour] = useState(false);
+  const [showFindFriends, setShowFindFriends] = useState(false);
 
-  const setActiveUser = (next: AuthUser) => {
-    setUser(next);
-    setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
-  };
-  const [friendUsernames, setFriendUsernames] = useState(() => Object.values(friends).map((friend) => friend.username));
-  // The signed-in user's mountain, shared by Accomplishments (where it's re-ranked) and their profile
-  const [myRanking, setMyRanking] = useState([
-    "Holy Jim Falls", "Bommer Canyon Loop", "Top of the World", "Crystal Cove Moro Ridge",
-    "Peters Canyon Loop", "Quail Hill Trail", "Black Star Canyon", "Buck Gully Trail",
-    "Laguna Coast Loop", "Santiago Oaks", "Moro Canyon Trail", "Red Rock Canyon",
-  ]);
+  // The signed-in user's own data, all loaded from Supabase
+  const [following, setFollowingIds] = useState<string[]>([]);
+  const [myLogs, setMyLogs] = useState<HikeLog[] | null>(null); // null while loading
+  const [myRanking, setMyRanking] = useState<string[]>([]);
+  const [unlockedKeys, setUnlockedKeys] = useState<string[]>([]);
+  const [accomError, setAccomError] = useState("");
+  const [feedIds, setFeedIds] = useState<string[] | null>(null); // null while loading
+  const [feedError, setFeedError] = useState("");
+  // Other users' mountains, for the ranking tag on their posts and their profile's Mountain tab
+  const [otherRankings, setOtherRankings] = useState<Record<string, string[]>>({});
+  const requestedRankings = useRef(new Set<string>());
+
   // Screens opened on top of the current tab (someone's profile, a single post), newest last.
   // Each remembers the scroll position underneath it so Back returns to the same spot.
   const [views, setViews] = useState<View[]>([]);
@@ -1743,6 +1871,76 @@ export default function App() {
     window.scrollTo({ top: restoreScroll.current });
     restoreScroll.current = null;
   }, [views]);
+
+  const loadRankings = useCallback((ids: string[]) => {
+    const missing = [...new Set(ids)].filter((id) => !requestedRankings.current.has(id));
+    if (!missing.length) return;
+    missing.forEach((id) => requestedRankings.current.add(id));
+    fetchRankings(missing)
+      .then((found) => setOtherRankings((current) => ({ ...current, ...found })))
+      .catch((error) => console.error("Couldn't load rankings", error));
+  }, []);
+
+  const addProfiles = useCallback(
+    (profiles: Friend[]) => {
+      if (!profiles.length) return;
+      setUsers((current) => ({ ...current, ...Object.fromEntries(profiles.map((profile) => [profile.id, profile])) }));
+      loadRankings(profiles.map((profile) => profile.id));
+    },
+    [loadRankings],
+  );
+
+  const { value: postsValue, reset: resetPosts } = usePostsStore(userId, addProfiles);
+  const { loadPosts } = postsValue;
+
+  const refreshFeed = useCallback(
+    async (followingIds: string[]) => {
+      if (!userId) return;
+      try {
+        setFeedIds(await loadPosts({ userIds: [userId, ...followingIds] }));
+        setFeedError("");
+      } catch (error) {
+        setFeedError(message(error));
+      }
+    },
+    [userId, loadPosts],
+  );
+
+  const refreshMine = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const [logs, keys] = await Promise.all([fetchMyLogs(userId), fetchUnlockedIngredients(userId)]);
+      setMyLogs(logs);
+      setMyRanking(rankingFrom(logs));
+      setUnlockedKeys(keys);
+      setAccomError("");
+    } catch (error) {
+      setAccomError(message(error));
+    }
+  }, [userId]);
+
+  // Load everything for the signed-in user
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    refreshMine();
+    fetchFollowing(userId)
+      .then(async (ids) => {
+        if (cancelled) return;
+        setFollowingIds(ids);
+        addProfiles(await fetchProfiles(ids));
+        await refreshFeed(ids);
+      })
+      .catch((error) => setFeedError(message(error)));
+    return () => { cancelled = true; };
+  }, [userId, refreshMine, refreshFeed, addProfiles]);
+
+  // Someone's profile opened from search or a friends list may not be loaded yet
+  useEffect(() => {
+    if (view?.kind !== "profile") return;
+    loadRankings([view.id]);
+    if (!users[view.id]) fetchProfiles([view.id]).then(addProfiles).catch((error) => console.error(error));
+  }, [view, users, loadRankings, addProfiles]);
 
   const switchTab = (next: Tab) => {
     setTab(next);
@@ -1765,19 +1963,47 @@ export default function App() {
 
   // Your own avatar or name takes you to your Profile tab; anyone else's opens their profile
   const openProfile = (id: string) => {
+    setShowFindFriends(false);
     if (id === user?.id) switchTab("profile");
     else pushView({ kind: "profile", id });
   };
   const openPost = (id: string) => pushView({ kind: "post", id });
 
-  const updatePost = (id: string, update: (post: FeedPost) => FeedPost) => {
-    setPosts((current) => current.map((post) => (post.id === id ? update(post) : post)));
+  const setActiveUser = (next: AuthUser) => {
+    setUser(next);
+    setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
   };
 
-  const toggleFriend = (username: string) => {
-    setFriendUsernames((current) =>
-      current.includes(username) ? current.filter((friend) => friend !== username) : [...current, username],
-    );
+  const toggleFollow = (person: Friend) => {
+    if (!userId) return;
+    const follow = !following.includes(person.id);
+    const next = follow ? [...following, person.id] : following.filter((id) => id !== person.id);
+    addProfiles([person]);
+    setFollowingIds(next);
+    setFollowing(userId, person.id, follow)
+      .then(() => refreshFeed(next))
+      .catch((error) => {
+        console.error("Couldn't update friends", error);
+        setFollowingIds(following);
+      });
+  };
+
+  const signOut = () => {
+    supabase.auth.signOut().catch((error) => console.error("Sign out failed", error));
+    setUser(null);
+    setUsers({});
+    setTab("feed");
+    setShowSettings(false);
+    setShowTour(false);
+    setViews([]);
+    setFollowingIds([]);
+    setMyLogs(null);
+    setMyRanking([]);
+    setUnlockedKeys([]);
+    setFeedIds(null);
+    setOtherRankings({});
+    requestedRankings.current.clear();
+    resetPosts();
   };
 
   if (!user) {
@@ -1802,42 +2028,45 @@ export default function App() {
       .then(({ error }) => { if (error) console.error("Couldn't save has_onboarded", error); });
   };
 
+  const me = users[user.id] ?? profileFromAuth(user);
+  const friends = following.map((id) => users[id]).filter((person): person is Friend => !!person);
+  const feedPosts = feedIds === null ? null : feedIds.map((id) => postsValue.posts[id]).filter((post) => !!post);
+
   return (
     <UsersContext.Provider
       value={{
-        currentUser: users[user.id] ?? profileFromAuth(user),
+        currentUser: me,
         users,
         openProfile,
-        rankings: { ...mockRankings, [user.id]: myRanking },
+        rankings: { ...otherRankings, [user.id]: myRanking },
       }}
     >
+    <PostsContext.Provider value={postsValue}>
       {view?.kind === "profile" && (
         <Shell onBack={goBack}>
           <Profile
-            friendUsernames={friendUsernames}
+            following={following}
+            friends={[]}
             isOwn={false}
             key={view.id}
+            onFindFriends={() => setShowFindFriends(true)}
             onLogHike={() => switchTab("log")}
             onOpenPost={openPost}
-            onSignOut={() => {}}
-            onToggleFriend={toggleFriend}
-            posts={posts}
+            onOpenProfile={openProfile}
+            onToggleFollow={toggleFollow}
             profile={users[view.id] ?? { id: view.id, name: "TrailMix hiker", username: "hiker", color: "#9ba196" }}
-            ranking={mockRankings[view.id] ?? []}
+            ranking={otherRankings[view.id] ?? []}
           />
         </Shell>
       )}
       {view?.kind === "post" && (
         <Shell onBack={goBack}>
           <section className="screen-content post-detail-screen">
-            {(() => {
-              const post = posts.find((item) => item.id === view.id);
-              return post ? (
-                <HikePost post={post} {...postActions(post, updatePost)} />
-              ) : (
-                <p className="post-missing">This hike isn't available anymore.</p>
-              );
-            })()}
+            {postsValue.posts[view.id] ? (
+              <HikePost post={postsValue.posts[view.id]} />
+            ) : (
+              <p className="post-missing">This hike isn't available anymore.</p>
+            )}
           </section>
         </Shell>
       )}
@@ -1845,17 +2074,33 @@ export default function App() {
       <div hidden={!!view}>
       {tab === "feed" && (
         <Shell>
-          <Feed onUpdatePost={updatePost} posts={posts} />
+          <Feed loadError={feedError} onFindFriends={() => setShowFindFriends(true)} posts={feedPosts} />
         </Shell>
       )}
       {tab === "accomplishments" && (
         <Shell>
-          <Accomplishments accomRanking={myRanking} onLogHike={() => switchTab("log")} setAccomRanking={setMyRanking} />
+          <Accomplishments
+            loadError={accomError}
+            logs={myLogs}
+            onLogHike={() => switchTab("log")}
+            onReorder={setMyRanking}
+            onSaveOrder={() => {
+              if (!myLogs) return;
+              saveRanking(myLogs, myRanking)
+                .then(refreshMine)
+                .catch((error) => {
+                  setAccomError(message(error));
+                  refreshMine();
+                });
+            }}
+            ranking={myRanking}
+            unlockedKeys={unlockedKeys}
+          />
         </Shell>
       )}
       {tab === "profile" && showSettings && (
         <Shell onBack={() => setShowSettings(false)}>
-          <Settings onUpdateUser={(changes) => setActiveUser({ ...user, ...changes })} user={user} />
+          <Settings onSignOut={signOut} onUpdateUser={(changes) => setActiveUser({ ...user, ...changes })} user={user} />
         </Shell>
       )}
       {tab === "profile" && !showSettings && (
@@ -1870,14 +2115,15 @@ export default function App() {
           }
         >
           <Profile
-            friendUsernames={friendUsernames}
+            following={following}
+            friends={friends}
             isOwn
+            onFindFriends={() => setShowFindFriends(true)}
             onLogHike={() => switchTab("log")}
             onOpenPost={openPost}
-            onSignOut={() => { setUser(null); setTab("feed"); setShowSettings(false); setViews([]); }}
-            onToggleFriend={toggleFriend}
-            posts={posts}
-            profile={users[user.id] ?? profileFromAuth(user)}
+            onOpenProfile={openProfile}
+            onToggleFollow={toggleFollow}
+            profile={me}
             ranking={myRanking}
           />
         </Shell>
@@ -1886,31 +2132,50 @@ export default function App() {
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
       <div hidden={tab !== "log"}>
         <LogHikeFlow
+          friends={friends}
+          myLogs={myLogs}
           myRanking={myRanking}
-          onRankingChange={setMyRanking}
-          onLogHike={(post) => {
-            setPosts((current) => [post, ...current]);
-            switchTab("profile");
+          onDone={() => switchTab("profile")}
+          onSaved={() => {
+            refreshMine();
+            refreshFeed(following);
           }}
+          unlockedKeys={unlockedKeys}
           user={user}
         />
       </div>
       <BottomNav active={tab} onChange={switchTab} />
+      {showFindFriends && (
+        <FindFriends
+          currentUserId={user.id}
+          following={following}
+          onClose={() => setShowFindFriends(false)}
+          onOpenProfile={openProfile}
+          onToggleFollow={toggleFollow}
+        />
+      )}
       {showTour && <Tour onFinish={finishTour} onShowTab={switchTab} />}
+    </PostsContext.Provider>
     </UsersContext.Provider>
   );
 }
 
 function LogHikeFlow({
-  onLogHike,
   user,
+  myLogs,
   myRanking,
-  onRankingChange,
+  unlockedKeys,
+  friends,
+  onSaved,
+  onDone,
 }: {
-  onLogHike: (post: FeedPost) => void;
   user: AuthUser;
+  myLogs: HikeLog[] | null; // null while loading
   myRanking: string[]; // the user's mountain, #1 first
-  onRankingChange: (ranking: string[]) => void;
+  unlockedKeys: string[];
+  friends: Friend[]; // people the user can tag
+  onSaved: () => void; // the hike is in Supabase: refresh the user's data
+  onDone: () => void;
 }) {
   const [step, setStep] = useState(1);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
@@ -1919,62 +2184,119 @@ function LogHikeFlow({
   // Working copy of the mountain while placing the new hike: top four, then the rest
   const [ranking, setRanking] = useState<string[]>([]);
   const [lowerRanking, setLowerRanking] = useState<string[]>([]);
+  const [skippedRanking, setSkippedRanking] = useState(false);
   const [selectedDetails, setSelectedDetails] = useState<number[]>([0]);
+  const [media, setMedia] = useState<File[]>([]);
   const [caption, setCaption] = useState("");
-  const [taggedFriends, setTaggedFriends] = useState<string[]>([]);
+  const [taggedIds, setTaggedIds] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [saved, setSaved] = useState<{ unlockIndex: number | null; previousShapes: string[]; isFirstHike: boolean } | null>(null);
 
   const go = (next: number) => {
     setStep(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (step === 1) return <TrailSelect onNext={() => go(2)} selected={selectedTrail} setSelected={setSelectedTrail} />;
-  const loggedTrail = selectedTrail ?? trails[0];
+  if (step === 1 || !selectedTrail) {
+    return <TrailSelect onNext={() => go(2)} selected={selectedTrail} setSelected={setSelectedTrail} />;
+  }
+  const trail = selectedTrail;
 
-  // Start from the user's real mountain with the logged trail at #4 (a repeat hike gets re-placed)
-  const startRanking = () => {
-    const others = myRanking.filter((name) => name !== loggedTrail.name);
-    setRanking([...others.slice(0, 3), loggedTrail.name]);
+  // Place the hike on the user's real mountain at #4 (a repeat hike gets re-placed).
+  // With nothing else on the mountain there's nothing to compare, so it's simply #1.
+  const afterRating = () => {
+    if (myLogs === null) return; // still loading the user's hikes
+    const others = myRanking.filter((name) => name !== trail.name);
+    if (others.length === 0) {
+      setRanking([trail.name]);
+      setLowerRanking([]);
+      setSkippedRanking(true);
+      go(4);
+      return;
+    }
+    setRanking([...others.slice(0, 3), trail.name]);
     setLowerRanking(others.slice(3));
+    setSkippedRanking(false);
     go(3);
   };
 
-  if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={startRanking} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={loggedTrail} />;
-  if (step === 3) return <RankTrail lowerRanking={lowerRanking} newTrail={loggedTrail.name} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} />;
-  if (step === 4) return <AddDetails caption={caption} onBack={() => go(3)} onSave={() => go(5)} selectedDetails={selectedDetails} setCaption={setCaption} setSelectedDetails={setSelectedDetails} setTaggedFriends={setTaggedFriends} taggedFriends={taggedFriends} />;
+  const save = async () => {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const unlockIndex = nextUnlockIndex(unlockedKeys);
+      await saveHikeLog({
+        userId: user.id,
+        trailId: trail.id,
+        trailName: trail.name,
+        reaction: rating,
+        difficulty: ["Easy", "Moderate", "Tough"][difficulty - 1],
+        highlights: selectedDetails.map((index) => detailOptions[index].label),
+        caption,
+        media,
+        taggedUserIds: taggedIds,
+        order: [...ranking, ...lowerRanking],
+        myLogs: myLogs ?? [],
+        unlockedIngredient: unlockIndex !== null ? detailOptions[unlockIndex].shape : null,
+      });
+      setSaved({ unlockIndex, previousShapes: hikeShapes(myLogs ?? []), isFirstHike: (myLogs ?? []).length === 0 });
+      onSaved();
+      go(5);
+    } catch (error) {
+      setSaveError(`Couldn't save your hike: ${message(error)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (step === 2) return <RateTrail difficulty={difficulty} onBack={() => go(1)} onNext={afterRating} rating={rating} setDifficulty={setDifficulty} setRating={setRating} trail={trail} />;
+  if (step === 3) return <RankTrail lowerRanking={lowerRanking} newTrail={trail.name} onBack={() => go(2)} onNext={() => go(4)} ranking={ranking} setLowerRanking={setLowerRanking} setRanking={setRanking} />;
+  if (step === 4 || !saved) {
+    return (
+      <AddDetails
+        caption={caption}
+        friends={friends}
+        media={media}
+        onBack={() => go(skippedRanking ? 2 : 3)}
+        onSave={save}
+        saveError={saveError}
+        saving={saving}
+        selectedDetails={selectedDetails}
+        setCaption={setCaption}
+        setMedia={setMedia}
+        setSelectedDetails={setSelectedDetails}
+        setTaggedIds={setTaggedIds}
+        taggedIds={taggedIds}
+        trailName={trail.name}
+        unlocked={unlockedIndexes(unlockedKeys)}
+      />
+    );
+  }
   return (
     <Result
       details={selectedDetails}
+      isFirstHike={saved.isFirstHike}
+      jarOwner={user.name.split(" ")[0]}
       lowerRanking={lowerRanking}
-      onBack={() => go(4)}
       onRestart={() => {
-        const completedTrail = loggedTrail;
-        // Save where they placed it, so their posts' ranking tags match their mountain
-        onRankingChange([...ranking, ...lowerRanking]);
-        onLogHike({
-          id: `post-${Date.now()}`,
-          friend: profileFromAuth(user),
-          trail: completedTrail,
-          image: completedTrail.image,
-          caption: caption.trim() || `A day out on ${completedTrail.name}.`,
-          date: new Date().toISOString().slice(0, 10),
-          likes: 0,
-          liked: false,
-          saved: false,
-          taggedUsers: taggedFriends.map((name) => name.toLowerCase()),
-          comments: [],
-        });
         setRating("");
         setDifficulty(2);
         setCaption("");
-        setTaggedFriends([]);
+        setMedia([]);
+        setTaggedIds([]);
         setSelectedDetails([0]);
         setSelectedTrail(null);
+        setSaved(null);
+        setSaveError("");
         go(1);
+        onDone();
       }}
-      rank={[...ranking, ...lowerRanking].indexOf(loggedTrail.name) + 1}
+      previousShapes={saved.previousShapes}
+      rank={[...ranking, ...lowerRanking].indexOf(trail.name) + 1}
       ranking={ranking}
-      trail={loggedTrail}
+      trail={trail}
+      unlockIndex={saved.unlockIndex}
     />
   );
 }

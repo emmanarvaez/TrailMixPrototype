@@ -1,5 +1,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { AuthUser } from "./Authpage";
+import { colorFor, updateProfile, uploadAvatar } from "../lib/db";
+import { supabase } from "../lib/supabase";
 
 type Field = "email" | "phone" | "password";
 
@@ -12,9 +14,11 @@ const fieldLabels: Record<Field, string> = {
 export default function Settings({
   user,
   onUpdateUser,
+  onSignOut,
 }: {
   user: AuthUser;
   onUpdateUser: (changes: Partial<AuthUser>) => void;
+  onSignOut: () => void;
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Field | null>(null);
@@ -22,6 +26,9 @@ export default function Settings({
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<Field | "photo" | null>(null);
+  const [savedMessage, setSavedMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [photoError, setPhotoError] = useState("");
 
   const currentValues: Record<Field, string> = {
     email: user.email,
@@ -43,34 +50,52 @@ export default function Settings({
     setError("");
   };
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const next = value.trim();
-    if (editing === "email") {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) return setError("Enter a valid email address.");
-      onUpdateUser({ email: next });
-    } else if (editing === "phone") {
-      if (next.replace(/\D/g, "").length < 10) return setError("Enter a phone number with at least 10 digits.");
-      onUpdateUser({ phone: next });
-    } else if (editing === "password") {
+    if (editing === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) return setError("Enter a valid email address.");
+    if (editing === "phone" && next.replace(/\D/g, "").length < 10) return setError("Enter a phone number with at least 10 digits.");
+    if (editing === "password") {
       if (value.length < 8) return setError("Use a password with at least 8 characters.");
       if (value !== confirmation) return setError("Those passwords don't match yet.");
-      // Mock only: no backend yet, so the new password isn't stored anywhere.
     }
-    setSaved(editing);
-    setEditing(null);
+    setSaving(true);
+    try {
+      if (editing === "email") {
+        // Supabase emails a confirmation link; the address only changes once it's clicked
+        const { error: emailError } = await supabase.auth.updateUser({ email: next });
+        if (emailError) throw emailError;
+        setSavedMessage(`Check ${next} to confirm the change`);
+      } else if (editing === "phone") {
+        await updateProfile(user.id, { phone: next });
+        onUpdateUser({ phone: next });
+        setSavedMessage("Saved");
+      } else if (editing === "password") {
+        const { error: passwordError } = await supabase.auth.updateUser({ password: value });
+        if (passwordError) throw passwordError;
+        setSavedMessage("Password updated");
+      }
+      setSaved(editing);
+      setEditing(null);
+    } catch (saveError) {
+      setError((saveError as { message?: string })?.message ?? "Couldn't save that. Try again?");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const changePhoto = (event: ChangeEvent<HTMLInputElement>) => {
+  const changePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      onUpdateUser({ avatar: reader.result as string });
+    setPhotoError("");
+    try {
+      const url = await uploadAvatar(user.id, file);
+      onUpdateUser({ avatar: url });
       setSaved("photo");
-    };
-    reader.readAsDataURL(file);
+    } catch (uploadError) {
+      setPhotoError((uploadError as { message?: string })?.message ?? "Couldn't upload that photo.");
+    }
   };
 
   return (
@@ -78,7 +103,7 @@ export default function Settings({
       <h1 className="settings-title">Settings</h1>
 
       <div className="settings-photo">
-        <span className="settings-avatar">
+        <span className="settings-avatar" style={{ background: colorFor(user.id) }}>
           {user.avatar ? <img alt="Your profile picture" src={user.avatar} /> : user.name.charAt(0).toUpperCase()}
         </span>
         <button className="settings-photo-button" onClick={() => fileInput.current?.click()} type="button">
@@ -86,6 +111,7 @@ export default function Settings({
         </button>
         <input accept="image/*" className="visually-hidden" onChange={changePhoto} ref={fileInput} tabIndex={-1} type="file" />
         {saved === "photo" && <p className="settings-saved">Profile picture updated</p>}
+        {photoError && <p className="settings-error" role="alert">{photoError}</p>}
       </div>
 
       <div className="settings-list">
@@ -116,7 +142,7 @@ export default function Settings({
                 {error && <p className="settings-error" role="alert">{error}</p>}
                 <div className="settings-form-actions">
                   <button className="settings-cancel" onClick={cancel} type="button">Cancel</button>
-                  <button className="settings-save" type="submit">Save</button>
+                  <button className="settings-save" disabled={saving} type="submit">{saving ? "Saving…" : "Save"}</button>
                 </div>
               </form>
             ) : (
@@ -125,10 +151,11 @@ export default function Settings({
                 <span aria-hidden="true" className="settings-chevron">›</span>
               </button>
             )}
-            {saved === field && <p className="settings-saved">{field === "password" ? "Password updated" : "Saved"}</p>}
+            {saved === field && <p className="settings-saved">{savedMessage}</p>}
           </div>
         ))}
       </div>
+      <button className="auth-signout settings-signout" onClick={onSignOut} type="button">Sign out</button>
     </section>
   );
 }
