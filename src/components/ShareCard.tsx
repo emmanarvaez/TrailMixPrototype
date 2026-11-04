@@ -5,24 +5,19 @@ import { detailOptions } from "../lib/ingredients";
 import type { FeedPost, Media } from "../types";
 
 // A 9:16 story card shown after a hike is posted, made to be saved or shared to
-// Instagram stories: a grid of the user's own hike photos with a white card on top and
-// Cashew climbing onto it. Everything on it comes from the user's posts and their real
-// mountain in Supabase. The card is laid out at 360×640 and exported at 3× (1080×1920).
+// Instagram stories: the post's photos (one filling the card, or a grid of up to six)
+// with a white card on top and Cashew climbing onto it. Everything on it comes from the
+// post and the user's real mountain in Supabase. The card is laid out at 360×640 and exported at 3× (1080×1920).
 
 const CARD_WIDTH = 360;
 const CARD_HEIGHT = 640;
 const EXPORT_SCALE = 3;
 const MILESTONES = [1, 5, 10, 25, 50];
 
-// Photo grid: 4 columns edge to edge with thin gaps, enough rows to cover the card
-const GRID_COLUMNS = 4;
+// Photos from the post: one fills the card; 2–6 make a 2-column grid with thin gaps
+const MAX_PHOTOS = 6;
 const GRID_GAP = 2;
-const TILE_SIZE = (CARD_WIDTH - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
-const GRID_ROWS = Math.ceil((CARD_HEIGHT + GRID_GAP) / (TILE_SIZE + GRID_GAP));
-const GRID_TILES = GRID_COLUMNS * GRID_ROWS;
-const TILE_PIXELS = Math.ceil(TILE_SIZE * EXPORT_SCALE); // tiles are cropped and shrunk to their exported size
-// Trail Dust, Sage and Cashew brown, softened, for tiles without a photo
-const FILL_COLORS = ["#e8dcc4", "#bccdaa", "#d6ab7f"];
+const PHOTO_PIXELS = CARD_WIDTH * EXPORT_SCALE; // photos are shrunk to about their exported size
 
 type CashewPose = "summit" | "celebrate" | "its-fine" | "not-for-me";
 const CASHEW_SVGS: Record<CashewPose, string> = {
@@ -43,7 +38,7 @@ type CardData = {
 // Every image on the card as a data URL, so the exported PNG never has to fetch
 // anything (and can't be blocked by CORS or come out blank on Safari)
 type CardImages = {
-  photos: string[]; // the user's hike photos, newest first, as square tiles
+  photos: string[]; // the post's photos and video stills, in post order
   avatar: string | null;
   cashew: string | null;
   logo: string;
@@ -71,24 +66,27 @@ async function imageAsDataUrl(url: string): Promise<string> {
   return blobToDataUrl(await fetchBlob(url));
 }
 
-// The center square of an image or video frame, shrunk to `size` pixels
-function squareCrop(source: CanvasImageSource, width: number, height: number, size: number): string {
+// Redraws an image or video frame as a JPEG, either as its center square (`square`, for
+// the avatar) or shrunk so its shorter side is at most `size` pixels (for photos)
+function redraw(source: CanvasImageSource, width: number, height: number, size: number, square = false): string {
   const side = Math.min(width, height);
+  const scale = Math.min(1, size / side);
+  const crop = square ? { x: (width - side) / 2, y: (height - side) / 2, w: side, h: side } : { x: 0, y: 0, w: width, h: height };
   const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  canvas.getContext("2d")!.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, size, size);
+  canvas.width = Math.round(square ? Math.min(size, side) : width * scale);
+  canvas.height = Math.round(square ? Math.min(size, side) : height * scale);
+  canvas.getContext("2d")!.drawImage(source, crop.x, crop.y, crop.w, crop.h, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.9);
 }
 
 // Loaded through a blob URL, which is same-origin, so the canvas stays readable
-async function imageTile(url: string, size: number): Promise<string> {
+async function imageTile(url: string, size: number, square = false): Promise<string> {
   const objectUrl = URL.createObjectURL(await fetchBlob(url));
   try {
     const image = new Image();
     image.src = objectUrl;
     await image.decode();
-    return squareCrop(image, image.naturalWidth, image.naturalHeight, size);
+    return redraw(image, image.naturalWidth, image.naturalHeight, size, square);
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -110,7 +108,7 @@ function videoTile(url: string, size: number): Promise<string> {
     };
     video.onseeked = () => {
       try {
-        resolve(squareCrop(video, video.videoWidth, video.videoHeight, size));
+        resolve(redraw(video, video.videoWidth, video.videoHeight, size));
       } catch {
         fail();
       } finally {
@@ -123,7 +121,7 @@ function videoTile(url: string, size: number): Promise<string> {
   });
 }
 
-const mediaTile = (media: Media) => (media.type === "video" ? videoTile(media.url, TILE_PIXELS) : imageTile(media.url, TILE_PIXELS));
+const mediaTile = (media: Media) => (media.type === "video" ? videoTile(media.url, PHOTO_PIXELS) : imageTile(media.url, PHOTO_PIXELS));
 
 // The wordmark SVG with "Trail" in the given color; "Mix" stays orange
 async function wordmark(color: string): Promise<string> {
@@ -145,8 +143,8 @@ function cashewPose({ rank, mountainSize, hikeCount }: CardData): CashewPose {
 }
 
 async function loadCard(userId: string, logId: string): Promise<{ data: CardData; images: CardImages }> {
-  const [{ posts }, logs] = await Promise.all([fetchPosts(userId, { userIds: [userId] }), fetchMyLogs(userId)]);
-  const post = posts.find((entry) => entry.id === logId);
+  const [{ posts }, logs] = await Promise.all([fetchPosts(userId, { logIds: [logId] }), fetchMyLogs(userId)]);
+  const post = posts[0];
   const log = logs.find((entry) => entry.id === logId);
   if (!post || !log) throw new Error("Couldn't find your new post.");
   const data: CardData = {
@@ -156,14 +154,10 @@ async function loadCard(userId: string, logId: string): Promise<{ data: CardData
     hikeCount: logs.length,
     ingredient: detailOptions.find((option) => option.label === log.highlights[0]) ?? null,
   };
-  // Posts come newest first, so the new post's photos lead the grid. Archived posts stay hidden.
-  const media = posts
-    .filter((entry) => entry.id === logId || !entry.archived)
-    .flatMap((entry) => entry.media)
-    .slice(0, GRID_TILES);
+  const media = post.media.slice(0, MAX_PHOTOS);
   const [photos, avatar, cashew, logo, wordmarkDark] = await Promise.all([
     Promise.all(media.map((item) => optional(mediaTile(item)))),
-    post.friend.avatar ? optional(imageTile(post.friend.avatar, 3 * 44)) : null,
+    post.friend.avatar ? optional(imageTile(post.friend.avatar, 3 * 44, true)) : null,
     optional(imageAsDataUrl(CASHEW_SVGS[cashewPose(data)])),
     imageAsDataUrl("/assets/trailmix_logo.svg"),
     wordmark("#3A2A1E"),
@@ -179,21 +173,22 @@ function ordinal(n: number) {
   return `${n}${suffix}`;
 }
 
-// Fewer photos than tiles: repeat them, shifting each row so a photo doesn't stack in
-// one column. A single photo appears once and the rest are TrailMix-colored tiles.
+// One photo fills the card. More make a 2-column grid; with an odd count the first
+// photo spans the top row (2 side by side, 3 = 1 + 2, 4 = 2×2, 5 = 1 + 2×2, 6 = 2×3).
 function PhotoGrid({ photos }: { photos: string[] }) {
+  if (photos.length === 0) return <div className="share-grid share-grid-empty" />;
+  const rows = Math.ceil(photos.length / 2);
   return (
-    <div className="share-grid" style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, ${TILE_SIZE}px)`, gridAutoRows: TILE_SIZE, gap: GRID_GAP }}>
-      {Array.from({ length: GRID_TILES }, (_, index) => {
-        const row = Math.floor(index / GRID_COLUMNS);
-        const column = index % GRID_COLUMNS;
-        const photo = photos.length > 1 ? photos[(index + row) % photos.length] : index === 0 ? photos[0] : undefined;
-        return photo ? (
-          <img alt="" className="share-tile" key={index} src={photo} />
-        ) : (
-          <span className="share-tile" key={index} style={{ background: FILL_COLORS[(row + column) % FILL_COLORS.length] }} />
-        );
-      })}
+    <div className="share-grid" style={{ gap: GRID_GAP, gridTemplateColumns: photos.length > 1 ? "1fr 1fr" : "1fr", gridTemplateRows: `repeat(${rows}, 1fr)` }}>
+      {photos.map((photo, index) => (
+        <img
+          alt=""
+          className="share-tile"
+          key={index}
+          src={photo}
+          style={index === 0 && photos.length % 2 === 1 ? { gridColumn: "1 / -1" } : undefined}
+        />
+      ))}
     </div>
   );
 }

@@ -1205,52 +1205,6 @@ function AddDetails({
           <h1>Add details</h1>
         </div>
         <div className="field-group">
-          <div className="section-heading"><h2>What made this one?</h2><span>Select multiple</span></div>
-          {/* Change 6: explain what ingredients are for */}
-          <p className="unlock-note" style={{ marginBottom: 4 }}>
-            Each hike adds an ingredient to your trail mix jar. Your jar shows what kind of hiker you are.
-          </p>
-          {/* Change 4 + 5: bigger vertical chips, locked state */}
-          <div className="detail-grid">
-            {detailOptions.map((option, index) => {
-              const isLocked = !unlocked.has(index);
-              const isSelected = selectedDetails.includes(index);
-              return (
-                <button
-                  className={`detail-chip ${isSelected ? "selected" : ""} ${isLocked ? "locked" : ""}`}
-                  disabled={isLocked}
-                  key={option.label}
-                  onClick={() => {
-                    if (isLocked) return;
-                    setSelectedDetails(
-                      isSelected
-                        ? selectedDetails.filter((item) => item !== index)
-                        : [...selectedDetails, index],
-                    );
-                  }}
-                >
-                  {isLocked ? (
-                    <span className="lock-badge">🔒</span>
-                  ) : (
-                    <img alt={option.ingredient} className="chip-ingredient-img" src={option.icon} />
-                  )}
-                  <span className="chip-text">
-                    <b>{option.label}</b>
-                    <small>{isLocked ? "Locked" : option.ingredient}</small>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {selectedDetails.length > 0 && (
-          <Mascot
-            key={selectedDetails[selectedDetails.length - 1]}
-            ingredient={detailOptions[selectedDetails[selectedDetails.length - 1]]?.ingredient}
-            variant="toss"
-          />
-        )}
-        <div className="field-group">
           <div className="section-heading">
             <h2>Photos &amp; videos <span className="required-mark">Required</span></h2>
             <span>{media.length} of {MAX_MEDIA}</span>
@@ -1342,6 +1296,52 @@ function AddDetails({
             </div>
           )}
         </div>
+        <div className="field-group">
+          <div className="section-heading"><h2>What made this one?</h2><span>Select multiple</span></div>
+          {/* Change 6: explain what ingredients are for */}
+          <p className="unlock-note" style={{ marginBottom: 4 }}>
+            Each hike adds an ingredient to your trail mix jar. Your jar shows what kind of hiker you are.
+          </p>
+          {/* Change 4 + 5: bigger vertical chips, locked state */}
+          <div className="detail-grid">
+            {detailOptions.map((option, index) => {
+              const isLocked = !unlocked.has(index);
+              const isSelected = selectedDetails.includes(index);
+              return (
+                <button
+                  className={`detail-chip ${isSelected ? "selected" : ""} ${isLocked ? "locked" : ""}`}
+                  disabled={isLocked}
+                  key={option.label}
+                  onClick={() => {
+                    if (isLocked) return;
+                    setSelectedDetails(
+                      isSelected
+                        ? selectedDetails.filter((item) => item !== index)
+                        : [...selectedDetails, index],
+                    );
+                  }}
+                >
+                  {isLocked ? (
+                    <span className="lock-badge">🔒</span>
+                  ) : (
+                    <img alt={option.ingredient} className="chip-ingredient-img" src={option.icon} />
+                  )}
+                  <span className="chip-text">
+                    <b>{option.label}</b>
+                    <small>{isLocked ? "Locked" : option.ingredient}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {selectedDetails.length > 0 && (
+          <Mascot
+            key={selectedDetails[selectedDetails.length - 1]}
+            ingredient={detailOptions[selectedDetails[selectedDetails.length - 1]]?.ingredient}
+            variant="toss"
+          />
+        )}
         {saving && <Mascot variant="stuffed-cheeks" />}
         {!saving && saveError && (
           <>
