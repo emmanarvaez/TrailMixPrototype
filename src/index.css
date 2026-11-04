@@ -836,55 +836,41 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 /* The card itself: always laid out at 360×640, scaled on screen, exported at 3× */
 .share-card {
   position: absolute; top: 0; left: 0; width: 360px; height: 640px; overflow: hidden;
-  transform-origin: top left; background: var(--forest); color: white;
+  transform-origin: top left; background: #f4eee1; color: var(--ink);
   font-family: "Inter:Regular", Inter, system-ui, sans-serif;
 }
-.share-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.share-photo-fallback { background: linear-gradient(160deg, #4b806b, var(--deep-forest)); }
-.share-shade {
-  position: absolute; inset: 0;
-  background: linear-gradient(to bottom, rgba(10, 20, 14, .6) 0%, rgba(10, 20, 14, 0) 30%, rgba(10, 20, 14, .12) 50%, rgba(10, 20, 14, 0) 66%, rgba(10, 20, 14, .72) 100%);
-}
-.share-overlay {
-  position: absolute; left: 24px; right: 24px; top: 50%; transform: translateY(-50%);
-  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
-  text-shadow: 0 2px 12px rgba(0, 0, 0, .45);
-}
-.share-overlay h2 { margin: 0; font-family: "Inter:Bold"; font-size: 36px; line-height: 1.05; letter-spacing: -1.4px; overflow-wrap: anywhere; }
-.share-rank { margin: 0 0 6px; font-family: "Inter:Semi Bold"; font-size: 18px; }
-.share-overlay svg { filter: drop-shadow(0 3px 8px rgba(0, 0, 0, .3)); }
-.share-ingredient {
-  display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 14px 6px 8px;
-  border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--deep-forest);
-  font-family: "Inter:Semi Bold"; font-size: 14px; text-shadow: none;
-}
-.share-ingredient img { width: 28px; height: 28px; object-fit: contain; }
-.share-footer { position: absolute; left: 0; right: 0; bottom: 30px; display: flex; justify-content: center; }
-.share-logo { display: flex; align-items: center; gap: 7px; }
-.share-logo-mark { width: 17px; height: 30px; object-fit: contain; }
-.share-logo-word { width: 96px; height: 20px; }
+/* Taller than the card by a part of a tile, centered so the cut is even top and bottom */
+.share-grid { position: absolute; left: 0; top: 50%; display: grid; transform: translateY(-50%); }
+.share-tile { display: block; width: 100%; height: 100%; object-fit: cover; }
 
-.share-milestone {
-  position: absolute; left: 30px; right: 30px; top: 50%; transform: translateY(-50%);
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  padding: 22px 20px 20px; border-radius: 26px; background: var(--paper); color: var(--ink);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, .3);
+.share-panel-wrap { position: absolute; left: 27px; right: 27px; top: 50%; transform: translateY(calc(-50% + 22px)); }
+.share-panel {
+  position: relative; z-index: 1; padding: 16px 18px 20px; border-radius: 20px; background: #fff;
+  box-shadow: 0 14px 34px rgba(30, 24, 16, .28), 0 2px 6px rgba(30, 24, 16, .12);
 }
-.share-cashew { position: absolute; top: -78px; right: -6px; width: 128px; height: auto; }
+.share-panel-top { display: flex; align-items: center; gap: 10px; }
 .share-avatar {
-  width: 74px; height: 74px; margin-top: 18px; display: grid; place-items: center; overflow: hidden;
-  border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 2px var(--sage);
-  color: white; font-family: "Inter:Bold"; font-size: 30px;
+  width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; overflow: hidden;
+  border-radius: 50%; color: white; font-family: "Inter:Bold"; font-size: 18px;
 }
 .share-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.share-username { margin-top: 8px; color: var(--muted); font-family: "Inter:Semi Bold"; font-size: 14px; }
-.share-milestone h2 { margin: 14px 0 0; color: var(--deep-forest); font-family: "Inter:Bold"; font-size: 25px; line-height: 1.12; letter-spacing: -.9px; }
-.share-keep { margin: 6px 0 0; color: var(--orange); font-family: "Inter:Semi Bold"; font-size: 16px; }
-.share-milestone-hike {
-  width: 100%; margin-top: 18px; padding-top: 16px; border-top: 1.5px dashed #d8d1bf;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
+.share-person { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.share-person b { color: var(--ink); font-family: "Inter:Semi Bold"; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share-person span { color: #8a8f88; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.share-logo { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
+.share-logo-mark { width: 12px; height: 21px; object-fit: contain; }
+.share-logo-word { width: 72px; height: 15px; }
+.share-panel h2 { margin: 22px 0 0; color: #1f2420; font-family: "Inter:Bold"; font-size: 23px; line-height: 1.18; letter-spacing: -.6px; overflow-wrap: anywhere; }
+.share-panel p { margin: 7px 0 0; color: #8a8f88; font-size: 14px; }
+
+/* Only the top of the SVG (head, ears, flag) is shown: the crop starts right of his tail and
+   ends at his chin, which sits just behind the card's top edge */
+.share-cashew { position: absolute; z-index: 0; right: 15px; top: -86px; width: 125px; height: 93px; overflow: hidden; }
+.share-cashew img { position: absolute; top: 0; left: -57px; width: 172px; height: auto; max-width: none; }
+.share-paw {
+  position: absolute; z-index: 2; top: -7px; width: 22px; height: 14px;
+  border: 2px solid #3a2a1e; border-radius: 50% 50% 42% 42%; background: #c98a4e;
 }
-.share-milestone-hike b { color: var(--deep-forest); font-family: "Inter:Bold"; font-size: 17px; letter-spacing: -.4px; }
-.share-milestone-hike span { color: var(--muted); font-size: 13px; }
-.share-milestone-hike .share-ingredient { background: var(--pale-sage); }
-.share-milestone-hike .share-ingredient span { color: var(--deep-forest); font-family: "Inter:Semi Bold"; font-size: 13px; }
+.share-paw::after { content: ""; position: absolute; left: 50%; bottom: 1px; width: 1.5px; height: 5px; margin-left: -.75px; border-radius: 1px; background: #3a2a1e; }
+.share-paw-left { right: 98px; transform: rotate(-8deg); }
+.share-paw-right { right: 44px; transform: rotate(8deg); }

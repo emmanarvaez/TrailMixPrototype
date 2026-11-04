@@ -5,13 +5,32 @@ import { detailOptions } from "../lib/ingredients";
 import type { FeedPost, Media } from "../types";
 
 // A 9:16 story card shown after a hike is posted, made to be saved or shared to
-// Instagram stories. Everything on it comes from the saved post and the user's real
+// Instagram stories: a grid of the user's own hike photos with a white card on top and
+// Cashew climbing onto it. Everything on it comes from the user's posts and their real
 // mountain in Supabase. The card is laid out at 360×640 and exported at 3× (1080×1920).
 
 const CARD_WIDTH = 360;
 const CARD_HEIGHT = 640;
 const EXPORT_SCALE = 3;
 const MILESTONES = [1, 5, 10, 25, 50];
+
+// Photo grid: 4 columns edge to edge with thin gaps, enough rows to cover the card
+const GRID_COLUMNS = 4;
+const GRID_GAP = 2;
+const TILE_SIZE = (CARD_WIDTH - GRID_GAP * (GRID_COLUMNS - 1)) / GRID_COLUMNS;
+const GRID_ROWS = Math.ceil((CARD_HEIGHT + GRID_GAP) / (TILE_SIZE + GRID_GAP));
+const GRID_TILES = GRID_COLUMNS * GRID_ROWS;
+const TILE_PIXELS = Math.ceil(TILE_SIZE * EXPORT_SCALE); // tiles are cropped and shrunk to their exported size
+// Trail Dust, Sage and Cashew brown, softened, for tiles without a photo
+const FILL_COLORS = ["#e8dcc4", "#bccdaa", "#d6ab7f"];
+
+type CashewPose = "summit" | "celebrate" | "its-fine" | "not-for-me";
+const CASHEW_SVGS: Record<CashewPose, string> = {
+  summit: "/assets/cashew-09-summit.svg",
+  celebrate: "/assets/cashew-08-celebrate.svg",
+  "its-fine": "/assets/cashew-03-its-fine.svg",
+  "not-for-me": "/assets/cashew-04-not-for-me.svg",
+};
 
 type CardData = {
   post: FeedPost;
@@ -24,13 +43,11 @@ type CardData = {
 // Every image on the card as a data URL, so the exported PNG never has to fetch
 // anything (and can't be blocked by CORS or come out blank on Safari)
 type CardImages = {
-  photo: string | null;
+  photos: string[]; // the user's hike photos, newest first, as square tiles
   avatar: string | null;
-  ingredient: string | null;
   cashew: string | null;
   logo: string;
-  wordmarkLight: string; // for the photo
-  wordmarkDark: string; // for the white milestone card
+  wordmark: string;
 };
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -44,15 +61,42 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 
 // Supabase Storage sends CORS headers for public files. "no-cache" skips a copy the
 // browser may have cached from a plain <img> on the feed, which lacks those headers.
-async function imageAsDataUrl(url: string): Promise<string> {
+async function fetchBlob(url: string): Promise<Blob> {
   const response = await fetch(url, { mode: "cors", cache: "no-cache" });
   if (!response.ok) throw new Error(`Couldn't load ${url} (${response.status})`);
-  return blobToDataUrl(await response.blob());
+  return response.blob();
 }
 
-// A still from early in the video, drawn to a canvas. crossOrigin keeps the canvas
-// readable; it works because Supabase Storage allows cross-origin reads.
-function videoFrameAsDataUrl(url: string): Promise<string> {
+async function imageAsDataUrl(url: string): Promise<string> {
+  return blobToDataUrl(await fetchBlob(url));
+}
+
+// The center square of an image or video frame, shrunk to `size` pixels
+function squareCrop(source: CanvasImageSource, width: number, height: number, size: number): string {
+  const side = Math.min(width, height);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  canvas.getContext("2d")!.drawImage(source, (width - side) / 2, (height - side) / 2, side, side, 0, 0, size, size);
+  return canvas.toDataURL("image/jpeg", 0.9);
+}
+
+// Loaded through a blob URL, which is same-origin, so the canvas stays readable
+async function imageTile(url: string, size: number): Promise<string> {
+  const objectUrl = URL.createObjectURL(await fetchBlob(url));
+  try {
+    const image = new Image();
+    image.src = objectUrl;
+    await image.decode();
+    return squareCrop(image, image.naturalWidth, image.naturalHeight, size);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+// A still from early in the video. crossOrigin keeps the canvas readable; it works
+// because Supabase Storage allows cross-origin reads.
+function videoTile(url: string, size: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const video = document.createElement("video");
     video.crossOrigin = "anonymous";
@@ -66,11 +110,7 @@ function videoFrameAsDataUrl(url: string): Promise<string> {
     };
     video.onseeked = () => {
       try {
-        const canvas = document.createElement("canvas");
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext("2d")!.drawImage(video, 0, 0);
-        resolve(canvas.toDataURL("image/jpeg", 0.92));
+        resolve(squareCrop(video, video.videoWidth, video.videoHeight, size));
       } catch {
         fail();
       } finally {
@@ -83,11 +123,9 @@ function videoFrameAsDataUrl(url: string): Promise<string> {
   });
 }
 
-function mediaAsDataUrl(media: Media): Promise<string> {
-  return media.type === "video" ? videoFrameAsDataUrl(media.url) : imageAsDataUrl(media.url);
-}
+const mediaTile = (media: Media) => (media.type === "video" ? videoTile(media.url, TILE_PIXELS) : imageTile(media.url, TILE_PIXELS));
 
-// The wordmark SVG recolored: "Trail" in the given color, "Mix" stays orange
+// The wordmark SVG with "Trail" in the given color; "Mix" stays orange
 async function wordmark(color: string): Promise<string> {
   const svg = await (await fetch("/assets/logo-word.svg")).text();
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace(/#3A2A1E/g, color))}`;
@@ -98,30 +136,42 @@ const optional = (load: Promise<string>) => load.catch((error) => {
   return null;
 });
 
+function cashewPose({ rank, mountainSize, hikeCount }: CardData): CashewPose {
+  if (rank === 1 || hikeCount === 1) return "summit";
+  if (MILESTONES.includes(hikeCount)) return "celebrate";
+  if (rank <= Math.ceil(mountainSize / 3)) return "celebrate";
+  if (rank <= Math.ceil((mountainSize * 2) / 3)) return "its-fine";
+  return "not-for-me";
+}
+
 async function loadCard(userId: string, logId: string): Promise<{ data: CardData; images: CardImages }> {
-  const [{ posts }, logs] = await Promise.all([fetchPosts(userId, { logIds: [logId] }), fetchMyLogs(userId)]);
-  const post = posts[0];
+  const [{ posts }, logs] = await Promise.all([fetchPosts(userId, { userIds: [userId] }), fetchMyLogs(userId)]);
+  const post = posts.find((entry) => entry.id === logId);
   const log = logs.find((entry) => entry.id === logId);
   if (!post || !log) throw new Error("Couldn't find your new post.");
-  const ingredient = detailOptions.find((option) => option.label === log.highlights[0]) ?? null;
   const data: CardData = {
     post,
     rank: log.rank ?? rankingFrom(logs).indexOf(log.trailName) + 1,
     mountainSize: rankingFrom(logs).length,
     hikeCount: logs.length,
-    ingredient,
+    ingredient: detailOptions.find((option) => option.label === log.highlights[0]) ?? null,
   };
-  const isFirst = data.hikeCount === 1;
-  const [photo, avatar, ingredientIcon, cashew, logo, wordmarkLight, wordmarkDark] = await Promise.all([
-    post.media[0] ? optional(mediaAsDataUrl(post.media[0])) : null,
-    post.friend.avatar ? optional(imageAsDataUrl(post.friend.avatar)) : null,
-    ingredient ? optional(imageAsDataUrl(ingredient.icon)) : null,
-    isFirst ? optional(imageAsDataUrl("/assets/cashew-09-summit.svg")) : null,
+  // Posts come newest first, so the new post's photos lead the grid. Archived posts stay hidden.
+  const media = posts
+    .filter((entry) => entry.id === logId || !entry.archived)
+    .flatMap((entry) => entry.media)
+    .slice(0, GRID_TILES);
+  const [photos, avatar, cashew, logo, wordmarkDark] = await Promise.all([
+    Promise.all(media.map((item) => optional(mediaTile(item)))),
+    post.friend.avatar ? optional(imageTile(post.friend.avatar, 3 * 44)) : null,
+    optional(imageAsDataUrl(CASHEW_SVGS[cashewPose(data)])),
     imageAsDataUrl("/assets/trailmix_logo.svg"),
-    wordmark("#FFFFFF"),
     wordmark("#3A2A1E"),
   ]);
-  return { data, images: { photo, avatar, ingredient: ingredientIcon, cashew, logo, wordmarkLight, wordmarkDark } };
+  return {
+    data,
+    images: { photos: photos.filter((photo): photo is string => !!photo), avatar, cashew, logo, wordmark: wordmarkDark },
+  };
 }
 
 function ordinal(n: number) {
@@ -129,88 +179,71 @@ function ordinal(n: number) {
   return `${n}${suffix}`;
 }
 
-// A mountain silhouette with a pin where this hike sits: #1 at the summit, the last
-// trail on the mountain near the foot of the slope
-function MountainPin({ rank, total }: { rank: number; total: number }) {
-  const summit = { x: 62, y: 9 };
-  const foot = { x: 16, y: 52 };
-  const t = total > 1 ? (rank - 1) / (total - 1) : 0;
-  const x = summit.x + (foot.x - summit.x) * t;
-  const y = summit.y + (foot.y - summit.y) * t;
+// Fewer photos than tiles: repeat them, shifting each row so a photo doesn't stack in
+// one column. A single photo appears once and the rest are TrailMix-colored tiles.
+function PhotoGrid({ photos }: { photos: string[] }) {
   return (
-    <svg aria-hidden="true" height="66" viewBox="0 0 132 66" width="132">
-      <path d="M0 64 30 34l10 8L62 9l20 26 10-9 40 38Z" fill="rgba(255,255,255,.92)" />
-      <path d="m62 9 9 11.5-5-2-4 4-4-3.5-6 2.5Z" fill="#dce5cf" />
-      <g transform={`translate(${x} ${y})`}>
-        <path d="M0 0c-4.6-5.4-7-9.2-7-12.4a7 7 0 0 1 14 0C7-9.2 4.6-5.4 0 0Z" fill="#e66a3c" stroke="#fff" strokeWidth="1.6" />
-        <circle cx="0" cy="-12.4" fill="#fff" r="2.6" />
-      </g>
-    </svg>
-  );
-}
-
-function Logo({ images, light }: { images: CardImages; light: boolean }) {
-  return (
-    <div className="share-logo">
-      <img alt="" className="share-logo-mark" src={images.logo} />
-      <img alt="TrailMix" className="share-logo-word" src={light ? images.wordmarkLight : images.wordmarkDark} />
-    </div>
-  );
-}
-
-function IngredientLine({ data, images }: { data: CardData; images: CardImages }) {
-  if (!data.ingredient) return null;
-  return (
-    <div className="share-ingredient">
-      {images.ingredient && <img alt="" src={images.ingredient} />}
-      <span>+ {data.ingredient.ingredient} for the {data.ingredient.label.toLowerCase()}</span>
+    <div className="share-grid" style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, ${TILE_SIZE}px)`, gridAutoRows: TILE_SIZE, gap: GRID_GAP }}>
+      {Array.from({ length: GRID_TILES }, (_, index) => {
+        const row = Math.floor(index / GRID_COLUMNS);
+        const column = index % GRID_COLUMNS;
+        const photo = photos.length > 1 ? photos[(index + row) % photos.length] : index === 0 ? photos[0] : undefined;
+        return photo ? (
+          <img alt="" className="share-tile" key={index} src={photo} />
+        ) : (
+          <span className="share-tile" key={index} style={{ background: FILL_COLORS[(row + column) % FILL_COLORS.length] }} />
+        );
+      })}
     </div>
   );
 }
 
 function Card({ data, images }: { data: CardData; images: CardImages }) {
-  const { post, rank, hikeCount } = data;
+  const { post, rank, hikeCount, ingredient } = data;
   const isMilestone = MILESTONES.includes(hikeCount);
-  const isFirst = hikeCount === 1;
   const person = post.friend;
+  const headline = hikeCount === 1
+    ? "Your first summit!"
+    : isMilestone
+      ? `You just ranked your ${ordinal(hikeCount)} hike!`
+      : `${post.trail.name} is #${rank} on my mountain!`;
+  const subline = isMilestone
+    ? "Keep climbing!"
+    : ingredient ? `+ ${ingredient.ingredient} for the ${ingredient.label.toLowerCase()}` : "";
   return (
     <>
-      {images.photo ? (
-        <img alt="" className="share-photo" src={images.photo} />
-      ) : (
-        <div className="share-photo share-photo-fallback" />
-      )}
-      <div className="share-shade" />
-
-      {isMilestone ? (
-        <div className="share-milestone">
-          {isFirst && images.cashew && <img alt="" className="share-cashew" src={images.cashew} />}
-          <Logo images={images} light={false} />
-          <span className="share-avatar" style={{ background: person.color }}>
-            {images.avatar ? <img alt="" src={images.avatar} /> : person.name.charAt(0).toUpperCase()}
-          </span>
-          {person.username && <span className="share-username">@{person.username}</span>}
-          <h2>{isFirst ? "Your first summit!" : `You just ranked your ${ordinal(hikeCount)} hike!`}</h2>
-          <p className="share-keep">Keep climbing!</p>
-          <div className="share-milestone-hike">
-            <b>{post.trail.name}</b>
-            <span>#{rank} on my mountain</span>
-            <IngredientLine data={data} images={images} />
+      <PhotoGrid photos={images.photos} />
+      <div className="share-panel-wrap">
+        {/* Cashew's head shows over the top edge; his body is hidden behind the card */}
+        {images.cashew && (
+          <div className="share-cashew">
+            <img alt="" src={images.cashew} />
           </div>
+        )}
+        <div className="share-panel">
+          <div className="share-panel-top">
+            <span className="share-avatar" style={{ background: person.color }}>
+              {images.avatar ? <img alt="" src={images.avatar} /> : person.name.charAt(0).toUpperCase()}
+            </span>
+            <span className="share-person">
+              <b>{person.name}</b>
+              {person.username && <span>@{person.username}</span>}
+            </span>
+            <span className="share-logo">
+              <img alt="" className="share-logo-mark" src={images.logo} />
+              <img alt="TrailMix" className="share-logo-word" src={images.wordmark} />
+            </span>
+          </div>
+          <h2>{headline}</h2>
+          {subline && <p>{subline}</p>}
         </div>
-      ) : (
-        <>
-          <div className="share-overlay">
-            <h2>{post.trail.name}</h2>
-            <p className="share-rank">#{rank} on my mountain</p>
-            <MountainPin rank={rank} total={data.mountainSize} />
-            <IngredientLine data={data} images={images} />
-          </div>
-          <div className="share-footer">
-            <Logo images={images} light />
-          </div>
-        </>
-      )}
+        {images.cashew && (
+          <>
+            <span className="share-paw share-paw-left" />
+            <span className="share-paw share-paw-right" />
+          </>
+        )}
+      </div>
     </>
   );
 }
