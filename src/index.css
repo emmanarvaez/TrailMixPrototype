@@ -809,3 +809,82 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 }
 .notif-follow.following { background: #fffaf0; color: var(--forest); border-color: #c9cbbd; }
 .post-comment.focused { margin: 0 -6px; padding: 6px; border-radius: 10px; background: #fbecd9; }
+
+/* ── Share card (after posting a hike) ── */
+.share-screen {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: 56px 16px calc(20px + env(safe-area-inset-bottom));
+  background: var(--deep-forest);
+}
+.share-close {
+  position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px;
+  width: 42px; height: 42px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: rgba(255, 255, 255, .14); color: white;
+}
+.share-stage { position: relative; flex: 0 0 auto; border-radius: 18px; overflow: hidden; box-shadow: 0 18px 40px rgba(0, 0, 0, .35); }
+.share-loading { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--forest); color: var(--pale-sage); font-family: "Inter:Semi Bold"; font-size: 14px; }
+.share-error { margin: 0; color: #ffd6c6; font-size: 13px; }
+.share-actions { display: flex; gap: 10px; width: min(100%, 360px); }
+.share-button {
+  flex: 1; min-height: 50px; border: 1.5px solid rgba(255, 255, 255, .5); border-radius: 15px;
+  background: transparent; color: white; font-family: "Inter:Semi Bold"; font-size: 16px;
+}
+.share-button-primary { border-color: var(--orange); background: var(--orange); }
+.share-button:disabled { opacity: .55; cursor: default; }
+
+/* The card itself: always laid out at 360×640, scaled on screen, exported at 3× */
+.share-card {
+  position: absolute; top: 0; left: 0; width: 360px; height: 640px; overflow: hidden;
+  transform-origin: top left; background: var(--forest); color: white;
+  font-family: "Inter:Regular", Inter, system-ui, sans-serif;
+}
+.share-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.share-photo-fallback { background: linear-gradient(160deg, #4b806b, var(--deep-forest)); }
+.share-shade {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(10, 20, 14, .6) 0%, rgba(10, 20, 14, 0) 30%, rgba(10, 20, 14, .12) 50%, rgba(10, 20, 14, 0) 66%, rgba(10, 20, 14, .72) 100%);
+}
+.share-overlay {
+  position: absolute; left: 24px; right: 24px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, .45);
+}
+.share-overlay h2 { margin: 0; font-family: "Inter:Bold"; font-size: 36px; line-height: 1.05; letter-spacing: -1.4px; overflow-wrap: anywhere; }
+.share-rank { margin: 0 0 6px; font-family: "Inter:Semi Bold"; font-size: 18px; }
+.share-overlay svg { filter: drop-shadow(0 3px 8px rgba(0, 0, 0, .3)); }
+.share-ingredient {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 6px 14px 6px 8px;
+  border-radius: 999px; background: rgba(255, 250, 240, .94); color: var(--deep-forest);
+  font-family: "Inter:Semi Bold"; font-size: 14px; text-shadow: none;
+}
+.share-ingredient img { width: 28px; height: 28px; object-fit: contain; }
+.share-footer { position: absolute; left: 0; right: 0; bottom: 30px; display: flex; justify-content: center; }
+.share-logo { display: flex; align-items: center; gap: 7px; }
+.share-logo-mark { width: 17px; height: 30px; object-fit: contain; }
+.share-logo-word { width: 96px; height: 20px; }
+
+.share-milestone {
+  position: absolute; left: 30px; right: 30px; top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 22px 20px 20px; border-radius: 26px; background: var(--paper); color: var(--ink);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .3);
+}
+.share-cashew { position: absolute; top: -78px; right: -6px; width: 128px; height: auto; }
+.share-avatar {
+  width: 74px; height: 74px; margin-top: 18px; display: grid; place-items: center; overflow: hidden;
+  border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 2px var(--sage);
+  color: white; font-family: "Inter:Bold"; font-size: 30px;
+}
+.share-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.share-username { margin-top: 8px; color: var(--muted); font-family: "Inter:Semi Bold"; font-size: 14px; }
+.share-milestone h2 { margin: 14px 0 0; color: var(--deep-forest); font-family: "Inter:Bold"; font-size: 25px; line-height: 1.12; letter-spacing: -.9px; }
+.share-keep { margin: 6px 0 0; color: var(--orange); font-family: "Inter:Semi Bold"; font-size: 16px; }
+.share-milestone-hike {
+  width: 100%; margin-top: 18px; padding-top: 16px; border-top: 1.5px dashed #d8d1bf;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+}
+.share-milestone-hike b { color: var(--deep-forest); font-family: "Inter:Bold"; font-size: 17px; letter-spacing: -.4px; }
+.share-milestone-hike span { color: var(--muted); font-size: 13px; }
+.share-milestone-hike .share-ingredient { background: var(--pale-sage); }
+.share-milestone-hike .share-ingredient span { color: var(--deep-forest); font-family: "Inter:Semi Bold"; font-size: 13px; }

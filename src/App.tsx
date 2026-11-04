@@ -10,6 +10,7 @@ import PickUsername from "./components/PickUsername";
 import Tour from "./components/Tour";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
+import ShareCard from "./components/ShareCard";
 import { PostsContext, usePostsStore } from "./context/PostsContext";
 import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
 import {
@@ -29,23 +30,9 @@ import {
   setFollowing,
 } from "./lib/db";
 import { supabase } from "./lib/supabase";
+import { detailOptions } from "./lib/ingredients";
 import { searchTrails } from "./lib/trails";
 import type { AppNotification, Friend, HikeLog, Trail } from "./types";
-
-const detailOptions = [
-  { label: "Views",       ingredient: "Chocolate",  color: "#6f4434", shape: "chocolate",  icon: "/assets/chocolate.svg" },
-  { label: "Waterfall",  ingredient: "Dried Fruit", color: "#6b405f", shape: "dried-fruit", icon: "/assets/dried-fruit.svg" },
-  { label: "Climb",      ingredient: "Almonds",     color: "#d7a15f", shape: "almonds",    icon: "/assets/almonds.svg" },
-  { label: "Sunset",     ingredient: "Cranberries", color: "#c94f3a", shape: "cranberries",icon: "/assets/cranberries.svg" },
-  { label: "Rocky",      ingredient: "Pretzels",    color: "#bd783f", shape: "pretzel",    icon: "/assets/pretzel.svg" },
-  { label: "Forest",     ingredient: "Nuts",        color: "#5a7a3a", shape: "nuts",       icon: "/assets/nuts.svg" },
-  { label: "Summit",     ingredient: "Apricot",     color: "#d4813a", shape: "apricot",    icon: "/assets/apricot.svg" },
-  { label: "Meadow",     ingredient: "Banana",      color: "#c9a820", shape: "banana",     icon: "/assets/banana.svg" },
-  { label: "River",      ingredient: "Dates",       color: "#7a4e2a", shape: "date",       icon: "/assets/date.svg" },
-  { label: "Campfire",   ingredient: "Popcorn",     color: "#d4b030", shape: "popcorn",    icon: "/assets/popcorn.svg" },
-  { label: "Snack Break",ingredient: "Chex",        color: "#b8763a", shape: "chex",       icon: "/assets/chex.svg" },
-  { label: "Shade",      ingredient: "Pistachios",  color: "#7a9e4a", shape: "pistachios", icon: "/assets/pistachios.svg" },
-];
 
 const ratings = [
   { label: "Loved it!", icon: "♥", color: "#e25e3f" },
@@ -2244,7 +2231,7 @@ export default function App() {
           friends={friends}
           myLogs={myLogs}
           myRanking={myRanking}
-          onDone={() => switchTab("profile")}
+          onDone={() => switchTab("feed")}
           onSaved={() => {
             refreshMine();
             refreshFeed(following);
@@ -2284,7 +2271,7 @@ function LogHikeFlow({
   unlockedKeys: string[];
   friends: Friend[]; // people the user can tag
   onSaved: () => void; // the hike is in Supabase: refresh the user's data
-  onDone: () => void;
+  onDone: () => void; // leaving after the share card: go to the feed
 }) {
   const [step, setStep] = useState(1);
   const [selectedTrail, setSelectedTrail] = useState<Trail | null>(null);
@@ -2300,7 +2287,8 @@ function LogHikeFlow({
   const [taggedIds, setTaggedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [saved, setSaved] = useState<{ unlockIndex: number | null; previousShapes: string[]; isFirstHike: boolean } | null>(null);
+  const [saved, setSaved] = useState<{ logId: string; unlockIndex: number | null; previousShapes: string[]; isFirstHike: boolean } | null>(null);
+  const [sharing, setSharing] = useState(false); // showing the story card after "Done"
 
   const go = (next: number) => {
     setStep(next);
@@ -2335,7 +2323,7 @@ function LogHikeFlow({
     setSaveError("");
     try {
       const unlockIndex = nextUnlockIndex(unlockedKeys);
-      await saveHikeLog({
+      const logId = await saveHikeLog({
         userId: user.id,
         trailId: trail.id,
         trailName: trail.name,
@@ -2349,7 +2337,7 @@ function LogHikeFlow({
         myLogs: myLogs ?? [],
         unlockedIngredient: unlockIndex !== null ? detailOptions[unlockIndex].shape : null,
       });
-      setSaved({ unlockIndex, previousShapes: hikeShapes(myLogs ?? []), isFirstHike: (myLogs ?? []).length === 0 });
+      setSaved({ logId, unlockIndex, previousShapes: hikeShapes(myLogs ?? []), isFirstHike: (myLogs ?? []).length === 0 });
       onSaved();
       go(5);
     } catch (error) {
@@ -2382,25 +2370,28 @@ function LogHikeFlow({
       />
     );
   }
+  const finish = () => {
+    setRating("");
+    setDifficulty(2);
+    setCaption("");
+    setMedia([]);
+    setTaggedIds([]);
+    setSelectedDetails([0]);
+    setSelectedTrail(null);
+    setSaved(null);
+    setSaveError("");
+    setSharing(false);
+    go(1);
+    onDone();
+  };
+  if (sharing) return <ShareCard logId={saved.logId} onClose={finish} userId={user.id} />;
   return (
     <Result
       details={selectedDetails}
       isFirstHike={saved.isFirstHike}
       jarOwner={user.name.split(" ")[0]}
       lowerRanking={lowerRanking}
-      onRestart={() => {
-        setRating("");
-        setDifficulty(2);
-        setCaption("");
-        setMedia([]);
-        setTaggedIds([]);
-        setSelectedDetails([0]);
-        setSelectedTrail(null);
-        setSaved(null);
-        setSaveError("");
-        go(1);
-        onDone();
-      }}
+      onRestart={() => setSharing(true)}
       previousShapes={saved.previousShapes}
       rank={[...ranking, ...lowerRanking].indexOf(trail.name) + 1}
       ranking={ranking}
