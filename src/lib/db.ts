@@ -110,26 +110,84 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
   return url;
 }
 
-// ─── Friends (who the user follows) ──────────────────────────────────────────
+// ─── Friends (mutual, through friend requests) ───────────────────────────────
+// Requests are changed only through database functions (see 008_friend_requests.sql),
+// which also make hikes visible to accepted friends only.
 
-export async function fetchFollowing(userId: string): Promise<string[]> {
-  const { data, error } = await supabase.from("friendships").select("friend_id").eq("user_id", userId);
-  if (error) throw error;
-  return data.map((row) => row.friend_id as string);
+export type FriendStatus = "none" | "outgoing" | "incoming" | "friends";
+export type FriendAction = "send" | "cancel" | "accept" | "decline" | "remove";
+
+// The signed-in user's friends and pending requests, as user IDs
+export type FriendState = {
+  friends: string[];
+  outgoing: string[]; // requests you sent that are still pending
+  incoming: string[]; // requests sent to you, newest first
+};
+
+export const EMPTY_FRIEND_STATE: FriendState = { friends: [], outgoing: [], incoming: [] };
+
+export function friendStatus(state: FriendState, id: string): FriendStatus {
+  if (state.friends.includes(id)) return "friends";
+  if (state.incoming.includes(id)) return "incoming";
+  if (state.outgoing.includes(id)) return "outgoing";
+  return "none";
 }
 
-// Who follows this user
-export async function fetchFollowers(userId: string): Promise<string[]> {
-  const { data, error } = await supabase.from("friendships").select("user_id").eq("friend_id", userId);
+type FriendRequestRow = { sender_id: string; recipient_id: string; status: string; created_at: string };
+
+export async function fetchFriendState(userId: string): Promise<FriendState> {
+  const { data, error } = await supabase
+    .from("friend_requests")
+    .select("sender_id, recipient_id, status, created_at")
+    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+    .in("status", ["pending", "accepted"])
+    .order("created_at", { ascending: false });
   if (error) throw error;
-  return data.map((row) => row.user_id as string);
+  const state: FriendState = { friends: [], outgoing: [], incoming: [] };
+  for (const row of data as FriendRequestRow[]) {
+    const other = row.sender_id === userId ? row.recipient_id : row.sender_id;
+    if (row.status === "accepted") state.friends.push(other);
+    else if (row.sender_id === userId) state.outgoing.push(other);
+    else state.incoming.push(other);
+  }
+  return state;
 }
 
-export async function setFollowing(userId: string, friendId: string, follow: boolean) {
-  const { error } = follow
-    ? await supabase.from("friendships").insert({ user_id: userId, friend_id: friendId })
-    : await supabase.from("friendships").delete().eq("user_id", userId).eq("friend_id", friendId);
+// Anyone's accepted friends (friendships are visible to everyone signed in)
+export async function fetchFriendIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("friend_requests")
+    .select("sender_id, recipient_id")
+    .eq("status", "accepted")
+    .or(`sender_id.eq.${userId},recipient_id.eq.${userId}`)
+    .order("responded_at", { ascending: false });
   if (error) throw error;
+  return data.map((row) => (row.sender_id === userId ? row.recipient_id : row.sender_id) as string);
+}
+
+export async function updateFriendship(otherId: string, action: FriendAction) {
+  const { error } =
+    action === "send"
+      ? await supabase.rpc("send_friend_request", { target: otherId })
+      : action === "cancel"
+        ? await supabase.rpc("cancel_friend_request", { target: otherId })
+        : action === "remove"
+          ? await supabase.rpc("remove_friend", { other: otherId })
+          : await supabase.rpc("respond_to_friend_request", { requester: otherId, accept: action === "accept" });
+  if (error) {
+    throw error.code === "PGRST202" ? new Error("Friend requests need 008_friend_requests.sql to be run in Supabase first.") : error;
+  }
+}
+
+// Watches for requests and friendships involving this user changing (sent, answered, removed).
+// Returns a function that stops listening.
+export function watchFriendRequests(userId: string, onChange: () => void): () => void {
+  const channel = supabase.channel(`friend-requests-${userId}`);
+  for (const column of ["sender_id", "recipient_id"]) {
+    channel.on("postgres_changes", { event: "*", schema: "public", table: "friend_requests", filter: `${column}=eq.${userId}` }, onChange);
+  }
+  channel.subscribe();
+  return () => { supabase.removeChannel(channel); };
 }
 
 // ─── Posts (hike logs as the feed shows them) ────────────────────────────────
@@ -469,7 +527,8 @@ export async function fetchNotifications(userId: string, limit = 100): Promise<{
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
-  const notifications = (data as unknown as NotificationRow[]).map((row): AppNotification => {
+  const known: AppNotification["type"][] = ["like", "comment", "tag", "reply", "friend_request", "friend_accept"];
+  const notifications = (data as unknown as NotificationRow[]).filter((row) => known.includes(row.type)).map((row): AppNotification => {
     const photo = row.hike_logs?.log_photos ? [...row.hike_logs.log_photos].sort((a, b) => a.sort_order - b.sort_order)[0] : undefined;
     return {
       id: row.id,

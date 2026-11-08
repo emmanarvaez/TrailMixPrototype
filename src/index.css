@@ -874,3 +874,31 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 .share-paw::after { content: ""; position: absolute; left: 50%; bottom: 1px; width: 1.5px; height: 5px; margin-left: -.75px; border-radius: 1px; background: #3a2a1e; }
 .share-paw-left { right: 98px; transform: rotate(-8deg); }
 .share-paw-right { right: 44px; transform: rotate(8deg); }
+
+/* ── Friends and friend requests ── */
+.friend-row-button {
+  flex: none; min-height: 32px; min-width: 78px; padding: 0 10px; border: 1px solid #c9cbbd; border-radius: 10px;
+  background: #fffaf0; color: var(--forest); font-family: "Inter:Semi Bold"; font-size: 11px; transition: transform .15s ease, background .15s ease;
+}
+.friend-row-button:active, .profile-add-button:active { transform: scale(.96); }
+.friend-row-button.friend-none, .friend-row-button.friend-accept,
+.profile-add-button.friend-none, .profile-add-button.friend-accept { background: var(--forest); border-color: var(--forest); color: #fffaf0; }
+.friend-row-button.friend-friends { background: var(--pale-sage); border-color: #b8c4aa; }
+.friend-row-button.friend-outgoing, .profile-add-button.friend-outgoing { color: var(--muted); border-color: #c9cbbd; }
+.friend-row-button.friend-decline, .profile-add-button.friend-decline { min-width: 0; color: var(--muted); border-color: #c9cbbd; background: transparent; }
+.profile-add-button.friend-friends { background: var(--pale-sage); border-color: #b8c4aa; }
+.friend-request-actions { flex: none; display: flex; gap: 6px; }
+.friend-request-actions.header { flex-direction: column; align-items: stretch; }
+.friend-request-actions.header .profile-add-button { justify-content: center; min-height: 34px; }
+.friend-request-count {
+  display: inline-block; margin-top: 2px; padding: 1px 7px; border-radius: 10px; background: var(--orange); color: white;
+  font-family: "Inter:Semi Bold"; font-size: 10px; font-style: normal; vertical-align: middle;
+}
+.profile-stats .friend-request-count { margin-top: 3px; }
+.notif-section.friend-requests h2 { display: flex; align-items: center; gap: 6px; }
+.notif-section.friend-requests .friend-request-count { margin-top: 0; }
+.profile-friends .friend-requests { margin-bottom: 20px; padding: 2px 12px 4px; border-radius: 16px; background: #fbf0dc; }
+.profile-friends .friend-requests .profile-section-heading { padding-top: 12px; }
+.profile-friends .friend-requests .profile-friend-row:last-child { border-bottom: 0; }
+.profile-locked { margin-top: 8px; }
+.profile-stats { grid-template-columns: repeat(2, 1fr); }

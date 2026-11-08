@@ -6,7 +6,7 @@ export default function Feed({
   loadError,
   onFindFriends,
 }: {
-  posts: FeedPost[] | null; // you and the people you follow, newest first; null while loading
+  posts: FeedPost[] | null; // you and your friends, newest first; null while loading
   loadError: string;
   onFindFriends: () => void;
 }) {

@@ -1,15 +1,24 @@
 import { useEffect, useState } from "react";
+import FriendButton from "./FriendButton";
 import MountainScene from "./MountainScene";
 import PeopleList from "./PeopleList";
 import { usePosts } from "../context/PostsContext";
-import { handle } from "../context/UsersContext";
-import { fetchFollowers, fetchFollowing, fetchProfiles, fetchSavedLogIds, fetchTaggedLogIds } from "../lib/db";
+import { handle, useUsers } from "../context/UsersContext";
+import {
+  fetchFriendIds,
+  fetchProfiles,
+  fetchSavedLogIds,
+  fetchTaggedLogIds,
+  friendStatus,
+  type FriendAction,
+  type FriendState,
+} from "../lib/db";
 import type { FeedPost, Friend } from "../types";
 
-type ProfileTab = "posts" | "mountain" | "saved" | "tagged" | "followers" | "following";
+type ProfileTab = "posts" | "mountain" | "saved" | "tagged" | "friends";
 
-// Saved hikes are private, so they only appear on your own profile. Followers and
-// following aren't tabs: they open from the counts under the profile picture.
+// Saved hikes are private, so they only appear on your own profile. Friends isn't a
+// tab: the list opens from the Friends count under the profile picture.
 const OWN_TABS: ProfileTab[] = ["posts", "mountain", "saved", "tagged"];
 const OTHER_TABS: ProfileTab[] = ["posts", "mountain", "tagged"];
 
@@ -18,23 +27,23 @@ export default function Profile({
   isOwn,
   ranking,
   currentUserId,
-  following,
+  friendState,
   onOpenPost,
   onOpenProfile,
   onLogHike,
   onFindFriends,
-  onToggleFollow,
+  onFriendAction,
 }: {
   profile: Friend; // whose profile this is
   isOwn: boolean; // true when it's the signed-in user's own profile
   ranking: string[]; // this user's mountain, #1 first
   currentUserId: string;
-  following: string[]; // IDs the signed-in user follows
+  friendState: FriendState; // the signed-in user's friends and requests
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
   onLogHike: () => void;
   onFindFriends: () => void;
-  onToggleFollow: (person: Friend) => void;
+  onFriendAction: (person: Friend, action: FriendAction) => void;
 }) {
   const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
   // Your own archived hikes, shown in place of your posts when opened
@@ -45,42 +54,47 @@ export default function Profile({
   const [taggedIds, setTaggedIds] = useState<string[] | null>(null);
   const [savedIds, setSavedIds] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState("");
-  // This profile's followers and the people it follows (IDs), plus their profiles once a list is opened
-  const [followerIds, setFollowerIds] = useState<string[] | null>(null);
-  const [followingIds, setFollowingIds] = useState<string[] | null>(null);
+  // This profile's accepted friends (IDs), plus their profiles once the list is opened
+  const [friendIds, setFriendIds] = useState<string[] | null>(null);
   const [people, setPeople] = useState<Friend[] | null>(null);
+  const { getUser } = useUsers();
   const firstName = profile.name.split(" ")[0];
-  const isFriend = following.includes(profile.id);
+  const status = friendStatus(friendState, profile.id);
+  // Hikes are friends-only: you see your own and your friends'. The database enforces this too.
+  const canView = isOwn || status === "friends";
   const tabs = isOwn ? OWN_TABS : OTHER_TABS;
-  const showingPeople = activeTab === "followers" || activeTab === "following";
-  const peopleIds = activeTab === "followers" ? followerIds : followingIds;
+  const showingPeople = activeTab === "friends";
+  const incoming = isOwn ? friendState.incoming.map(getUser) : [];
 
-  // Reloaded when the signed-in user follows or unfollows someone, so counts stay right
+  // Reloaded whenever the signed-in user's friendships change, so the count stays right
+  const myFriendsKey = friendState.friends.join(",");
   useEffect(() => {
-    Promise.all([fetchFollowers(profile.id), fetchFollowing(profile.id)])
-      .then(([followers, followed]) => {
-        setFollowerIds(followers);
-        setFollowingIds(followed);
-      })
+    fetchFriendIds(profile.id)
+      .then(setFriendIds)
       .catch((error) => setLoadError(error?.message ?? "Something went wrong."));
-  }, [profile.id, following]);
+  }, [profile.id, myFriendsKey]);
 
   useEffect(() => {
-    if (!showingPeople || peopleIds === null) return;
+    if (!showingPeople || friendIds === null) return;
     setPeople(null);
-    fetchProfiles(peopleIds)
-      .then((found) => setPeople(peopleIds.map((id) => found.find((person) => person.id === id)).filter((person): person is Friend => !!person)))
+    fetchProfiles(friendIds)
+      .then((found) => setPeople(friendIds.map((id) => found.find((person) => person.id === id)).filter((person): person is Friend => !!person)))
       .catch((error) => setLoadError(error?.message ?? "Something went wrong."));
-  }, [showingPeople, peopleIds]);
+  }, [showingPeople, friendIds]);
 
   useEffect(() => {
+    if (!canView) {
+      setOwnIds(null);
+      setTaggedIds(null);
+      return;
+    }
     const fail = (error: { message?: string }) => setLoadError(error?.message ?? "Something went wrong.");
     loadPosts({ userIds: [profile.id] }).then(setOwnIds).catch(fail);
     fetchTaggedLogIds(profile.id)
       .then((ids) => loadPosts({ logIds: ids }))
       .then(setTaggedIds)
       .catch(fail);
-  }, [profile.id, loadPosts]);
+  }, [profile.id, loadPosts, canView]);
 
   useEffect(() => {
     if (activeTab !== "saved" || savedIds !== null) return;
@@ -131,90 +145,113 @@ export default function Profile({
             <span>Add friends</span>
           </button>
         ) : (
-          <button
-            aria-pressed={isFriend}
-            className={`profile-add-button ${isFriend ? "following" : ""}`}
-            onClick={() => onToggleFollow(profile)}
-            type="button"
-          >
-            <span aria-hidden="true">{isFriend ? "✓" : "+"}</span>
-            <span>{isFriend ? "Following" : "Follow"}</span>
-          </button>
+          <FriendButton
+            name={handle(profile) || profile.name}
+            onAction={(action) => onFriendAction(profile, action)}
+            size="header"
+            status={status}
+          />
         )}
       </header>
 
       {/* Counts always show a number: 0 while loading or when there's nothing yet */}
       <div aria-label="Profile stats" className="profile-stats">
-        <div><b>{toPosts(ownIds).filter((post) => !post.archived).length}</b><span>Posts</span></div>
-        {(["followers", "following"] as const).map((list) => (
-          <button
-            aria-pressed={activeTab === list}
-            className={activeTab === list ? "selected" : ""}
-            key={list}
-            onClick={() => setActiveTab(activeTab === list ? "posts" : list)}
-            type="button"
-          >
-            <b>{(list === "followers" ? followerIds : followingIds)?.length ?? 0}</b>
-            <span>{list === "followers" ? "Followers" : "Following"}</span>
-          </button>
-        ))}
+        <div><b>{canView ? toPosts(ownIds).filter((post) => !post.archived).length : "–"}</b><span>Posts</span></div>
+        <button
+          aria-pressed={showingPeople}
+          className={showingPeople ? "selected" : ""}
+          onClick={() => setActiveTab(showingPeople ? "posts" : "friends")}
+          type="button"
+        >
+          <b>{friendIds?.length ?? 0}</b>
+          <span>Friends</span>
+          {incoming.length > 0 && <i className="friend-request-count">{incoming.length} new</i>}
+        </button>
       </div>
 
-      <div
-        aria-label="Profile sections"
-        className="profile-tabs"
-        role="tablist"
-        style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
-      >
-        {tabs.map((tab) => (
-          <button
-            aria-selected={activeTab === tab}
-            className={activeTab === tab ? "selected" : ""}
-            key={tab}
-            onClick={() => { setActiveTab(tab); setShowArchived(false); }}
-            role="tab"
-            type="button"
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
+      {canView && (
+        <div
+          aria-label="Profile sections"
+          className="profile-tabs"
+          role="tablist"
+          style={{ gridTemplateColumns: `repeat(${tabs.length}, 1fr)` }}
+        >
+          {tabs.map((tab) => (
+            <button
+              aria-selected={activeTab === tab}
+              className={activeTab === tab ? "selected" : ""}
+              key={tab}
+              onClick={() => { setActiveTab(tab); setShowArchived(false); }}
+              role="tab"
+              type="button"
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loadError && <p className="trail-search-note" role="alert">Couldn't load this profile: {loadError}</p>}
 
       {showingPeople ? (
-        <section aria-label={activeTab === "followers" ? "Followers" : "Following"} className="profile-friends">
+        <section aria-label="Friends" className="profile-friends">
+          {incoming.length > 0 && (
+            <section aria-label="Friend requests" className="friend-requests">
+              <div className="profile-section-heading">
+                <div><span className="eyebrow">Waiting on you</span><h2>Friend requests</h2></div>
+                <span>{incoming.length}</span>
+              </div>
+              <PeopleList
+                currentUserId={currentUserId}
+                friendState={friendState}
+                onFriendAction={onFriendAction}
+                onOpenProfile={onOpenProfile}
+                people={incoming}
+              />
+            </section>
+          )}
           <div className="profile-section-heading">
             <div>
               <span className="eyebrow">{isOwn ? "Your trail crew" : `${firstName}'s trail crew`}</span>
-              <h2>{activeTab === "followers" ? "Followers" : "Following"}</h2>
+              <h2>Friends</h2>
             </div>
-            <span>{peopleIds?.length ?? 0}</span>
+            <span>{friendIds?.length ?? 0}</span>
           </div>
           {people === null ? (
             <p className="trail-search-note">Loading…</p>
           ) : people.length > 0 ? (
             <PeopleList
               currentUserId={currentUserId}
-              following={following}
+              friendState={friendState}
+              onFriendAction={onFriendAction}
               onOpenProfile={onOpenProfile}
-              onToggleFollow={onToggleFollow}
               people={people}
             />
           ) : (
             <div className="profile-empty">
-              <h2>{activeTab === "followers" ? "No followers yet" : "Not following anyone yet"}</h2>
-              <p>
-                {activeTab === "followers"
-                  ? isOwn ? "When people follow you, they'll show up here." : `When people follow ${firstName}, they'll show up here.`
-                  : isOwn ? "Follow friends to see their trail stories." : `${firstName} isn't following anyone yet.`}
-              </p>
-              {isOwn && activeTab === "following" && (
-                <button className="profile-empty-action" onClick={onFindFriends} type="button">Find friends</button>
-              )}
+              <h2>No friends yet</h2>
+              <p>{isOwn ? "Add friends to see their trail stories." : `When ${firstName} adds friends, they'll show up here.`}</p>
+              {isOwn && <button className="profile-empty-action" onClick={onFindFriends} type="button">Find friends</button>}
             </div>
           )}
         </section>
+      ) : !canView ? (
+        <div className="profile-empty profile-locked">
+          <span aria-hidden="true" className="profile-empty-mark">
+            <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
+              <rect height="10" rx="2.5" width="15" x="4.5" y="10.5" />
+              <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+            </svg>
+          </span>
+          <h2>{firstName}'s hikes are for friends</h2>
+          <p>
+            {status === "outgoing"
+              ? `Once ${firstName} accepts your request, you'll see their hikes and mountain.`
+              : status === "incoming"
+                ? `Accept ${firstName}'s request to see each other's hikes.`
+                : `Add ${firstName} as a friend to see their hikes and mountain.`}
+          </p>
+        </div>
       ) : activeTab === "mountain" ? (
         ranking.length > 0 ? (
           <section aria-label={isOwn ? "Your mountain" : `${firstName}'s mountain`} className="profile-mountain">
@@ -241,7 +278,7 @@ export default function Profile({
         </button>
       )}
 
-      {showingPeople || activeTab === "mountain" ? null : listIds === null ? (
+      {showingPeople || !canView || activeTab === "mountain" ? null : listIds === null ? (
         <p className="trail-search-note">Loading hikes…</p>
       ) : visiblePosts.length > 0 ? (
         <div

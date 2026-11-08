@@ -14,8 +14,9 @@ import ShareCard from "./components/ShareCard";
 import { PostsContext, usePostsStore } from "./context/PostsContext";
 import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
 import {
+  EMPTY_FRIEND_STATE,
   MAX_MEDIA,
-  fetchFollowing,
+  fetchFriendState,
   fetchNotifications,
   fetchUnreadCount,
   markNotificationsRead,
@@ -27,7 +28,10 @@ import {
   rankingFrom,
   saveHikeLog,
   saveRanking,
-  setFollowing,
+  updateFriendship,
+  watchFriendRequests,
+  type FriendAction,
+  type FriendState,
 } from "./lib/db";
 import { supabase } from "./lib/supabase";
 import { detailOptions } from "./lib/ingredients";
@@ -1154,7 +1158,7 @@ function AddDetails({
   setMedia: React.Dispatch<React.SetStateAction<File[]>>;
   caption: string;
   setCaption: (caption: string) => void;
-  friends: Friend[]; // people the user follows, who can be tagged
+  friends: Friend[]; // the user's accepted friends, who can be tagged
   taggedIds: string[];
   setTaggedIds: React.Dispatch<React.SetStateAction<string[]>>;
   saving: boolean;
@@ -1170,7 +1174,7 @@ function AddDetails({
   );
   useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)), [previews]);
   const [friend, setFriend] = useState("");
-  // Typing just "@" lists everyone you follow; anything after it narrows by username or name
+  // Typing just "@" lists all your friends; anything after it narrows by username or name
   const typedAt = friend.trim().startsWith("@");
   const query = friend.trim().replace(/^@+/, "").toLowerCase();
   const friendSuggestions = query || typedAt
@@ -1261,7 +1265,7 @@ function AddDetails({
                   tagFriend(friendSuggestions[0]);
                 }
               }}
-              placeholder={friends.length ? "Type @ or a username" : "Follow friends to tag them in hikes"}
+              placeholder={friends.length ? "Type @ or a username" : "Add friends to tag them in hikes"}
               value={friend}
             />
           </div>
@@ -1274,7 +1278,7 @@ function AddDetails({
                   <i>+</i>
                 </button>
               )) : (
-                <p>{friends.length ? "No one you follow matches that" : "Follow people to tag them in hikes"}</p>
+                <p>{friends.length ? "None of your friends match that" : "Add friends to tag them in hikes"}</p>
               )}
             </div>
           )}
@@ -1843,7 +1847,10 @@ export default function App() {
   const [showFindFriends, setShowFindFriends] = useState(false);
 
   // The signed-in user's own data, all loaded from Supabase
-  const [following, setFollowingIds] = useState<string[]>([]);
+  // Accepted friends and pending requests; null until loaded
+  const [friendState, setFriendState] = useState<FriendState | null>(null);
+  const friendStateRef = useRef<FriendState | null>(null);
+  friendStateRef.current = friendState;
   const [myLogs, setMyLogs] = useState<HikeLog[] | null>(null); // null while loading
   const [myRanking, setMyRanking] = useState<string[]>([]);
   const [unlockedKeys, setUnlockedKeys] = useState<string[]>([]);
@@ -1889,13 +1896,14 @@ export default function App() {
   // A ref, because those refresh functions are built from the posts store itself.
   const onPostsChanged = useRef(() => {});
   const { value: postsValue, reset: resetPosts } = usePostsStore(userId, addProfiles, () => onPostsChanged.current());
-  const { loadPosts } = postsValue;
+  const { loadPosts, forgetAuthors } = postsValue;
 
   const refreshFeed = useCallback(
-    async (followingIds: string[]) => {
+    async (friendIds: string[]) => {
       if (!userId) return;
       try {
-        setFeedIds(await loadPosts({ userIds: [userId, ...followingIds] }));
+        // Your own hikes and your friends'. The database only returns friends' hikes anyway.
+        setFeedIds(await loadPosts({ userIds: [userId, ...friendIds] }));
         setFeedError("");
       } catch (error) {
         setFeedError(message(error));
@@ -1917,26 +1925,55 @@ export default function App() {
     }
   }, [userId]);
 
+  const myFriends = friendState?.friends ?? [];
   onPostsChanged.current = () => {
     refreshMine();
-    refreshFeed(following);
+    refreshFeed(myFriends);
   };
+
+  // Reloads friends and requests. Hikes by anyone who stopped being a friend are dropped
+  // from what's loaded, so they disappear everywhere straight away.
+  const refreshFriends = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const next = await fetchFriendState(userId);
+      const lost = (friendStateRef.current?.friends ?? []).filter((id) => !next.friends.includes(id));
+      if (lost.length) forgetAuthors(lost);
+      setFriendState(next);
+      addProfiles(await fetchProfiles([...next.friends, ...next.incoming, ...next.outgoing]));
+    } catch (error) {
+      console.error("Couldn't load friends", error);
+      // Still show the user's own hikes (e.g. before 008_friend_requests.sql has been run)
+      if (!friendStateRef.current) setFriendState(EMPTY_FRIEND_STATE);
+    }
+  }, [userId, addProfiles, forgetAuthors]);
 
   // Load everything for the signed-in user
   useEffect(() => {
     if (!userId) return;
-    let cancelled = false;
     refreshMine();
-    fetchFollowing(userId)
-      .then(async (ids) => {
-        if (cancelled) return;
-        setFollowingIds(ids);
-        addProfiles(await fetchProfiles(ids));
-        await refreshFeed(ids);
-      })
-      .catch((error) => setFeedError(message(error)));
-    return () => { cancelled = true; };
-  }, [userId, refreshMine, refreshFeed, addProfiles]);
+    refreshFriends();
+  }, [userId, refreshMine, refreshFriends]);
+
+  // The feed is you and your friends: reload it whenever the friend list changes
+  const friendsKey = friendState ? [...friendState.friends].sort().join(",") : null;
+  useEffect(() => {
+    if (friendsKey === null) return;
+    refreshFeed(friendsKey ? friendsKey.split(",") : []);
+  }, [friendsKey, refreshFeed]);
+
+  // Requests sent, answered or removed by the other person show up live
+  useEffect(() => {
+    if (!userId) return;
+    const stopWatching = watchFriendRequests(userId, refreshFriends);
+    // Unfriending isn't always delivered live, so also check when the app comes back into view
+    const onVisible = () => { if (document.visibilityState === "visible") refreshFriends(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopWatching();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [userId, refreshFriends]);
 
   // Someone's profile opened from search or a friends list may not be loaded yet
   useEffect(() => {
@@ -2006,13 +2043,16 @@ export default function App() {
     return watchNotifications(userId, () => {
       if (notificationsOpenRef.current) loadNotifications();
       else refreshUnread();
+      refreshFriends();
     });
-  }, [userId, refreshUnread, loadNotifications]);
+  }, [userId, refreshUnread, loadNotifications, refreshFriends]);
 
-  // Also refresh the badge whenever the feed is shown, in case a realtime update was missed
+  // Also refresh the badge and friends whenever the feed is shown, in case a realtime update was missed
   useEffect(() => {
-    if (tab === "feed" && !view) refreshUnread();
-  }, [tab, view, refreshUnread]);
+    if (tab !== "feed" || view) return;
+    refreshUnread();
+    refreshFriends();
+  }, [tab, view, refreshUnread, refreshFriends]);
 
   const openNotifications = () => {
     setUnreadCount(0);
@@ -2036,17 +2076,30 @@ export default function App() {
     setUsers((current) => ({ ...current, [next.id]: profileFromAuth(next) }));
   };
 
-  const toggleFollow = (person: Friend) => {
-    if (!userId) return;
-    const follow = !following.includes(person.id);
-    const next = follow ? [...following, person.id] : following.filter((id) => id !== person.id);
+  // Send, cancel, accept, decline or unfriend. The screen updates straight away and is
+  // put back if Supabase refuses; the feed reloads through the friend list changing.
+  const friendAction = (person: Friend, action: FriendAction) => {
+    if (!userId || !friendState || person.id === userId) return;
+    const before = friendState;
+    const without = (ids: string[]) => ids.filter((id) => id !== person.id);
+    const rest = { friends: without(before.friends), outgoing: without(before.outgoing), incoming: without(before.incoming) };
+    const becomesFriend = action === "accept" || (action === "send" && before.incoming.includes(person.id));
     addProfiles([person]);
-    setFollowingIds(next);
-    setFollowing(userId, person.id, follow)
-      .then(() => refreshFeed(next))
+    setFriendState(
+      becomesFriend
+        ? { ...rest, friends: [person.id, ...rest.friends] }
+        : action === "send"
+          ? { ...rest, outgoing: [person.id, ...rest.outgoing] }
+          : rest, // cancel, decline and remove
+    );
+    if (action === "remove") forgetAuthors([person.id]);
+    updateFriendship(person.id, action)
+      .then(refreshFriends)
       .catch((error) => {
-        console.error("Couldn't update friends", error);
-        setFollowingIds(following);
+        console.error("Couldn't update friendship", error);
+        setFriendState(before);
+        window.alert(`Couldn't update friends: ${message(error)}`);
+        refreshFriends();
       });
   };
 
@@ -2058,7 +2111,7 @@ export default function App() {
     setShowSettings(false);
     setShowTour(false);
     setViews([]);
-    setFollowingIds([]);
+    setFriendState(null);
     setMyLogs(null);
     setMyRanking([]);
     setUnlockedKeys([]);
@@ -2098,7 +2151,8 @@ export default function App() {
   };
 
   const me = users[user.id] ?? profileFromAuth(user);
-  const friends = following.map((id) => users[id]).filter((person): person is Friend => !!person);
+  const friends = myFriends.map((id) => users[id]).filter((person): person is Friend => !!person);
+  const friendProps = { friendState: friendState ?? EMPTY_FRIEND_STATE, onFriendAction: friendAction };
   const feedPosts = feedIds === null ? null : feedIds.map((id) => postsValue.posts[id]).filter((post) => !!post);
 
   return (
@@ -2115,14 +2169,13 @@ export default function App() {
         <Shell onBack={goBack}>
           <Profile
             currentUserId={user.id}
-            following={following}
+            {...friendProps}
             isOwn={false}
             key={view.id}
             onFindFriends={() => setShowFindFriends(true)}
             onLogHike={() => switchTab("log")}
             onOpenPost={openPost}
             onOpenProfile={openProfile}
-            onToggleFollow={toggleFollow}
             profile={users[view.id] ?? { id: view.id, name: "TrailMix hiker", username: "", color: "#9ba196" }}
             ranking={otherRankings[view.id] ?? []}
           />
@@ -2131,12 +2184,12 @@ export default function App() {
       {view?.kind === "notifications" && (
         <Shell onBack={goBack}>
           <Notifications
-            following={following}
+            {...friendProps}
+            currentUserId={user.id}
             loadError={notificationsError}
             notifications={notifications}
             onOpenPost={openPostFromNotification}
             onOpenProfile={openProfile}
-            onToggleFollow={toggleFollow}
           />
         </Shell>
       )}
@@ -2212,13 +2265,12 @@ export default function App() {
         >
           <Profile
             currentUserId={user.id}
-            following={following}
+            {...friendProps}
             isOwn
             onFindFriends={() => setShowFindFriends(true)}
             onLogHike={() => switchTab("log")}
             onOpenPost={openPost}
             onOpenProfile={openProfile}
-            onToggleFollow={toggleFollow}
             profile={me}
             ranking={myRanking}
           />
@@ -2234,7 +2286,7 @@ export default function App() {
           onDone={() => switchTab("feed")}
           onSaved={() => {
             refreshMine();
-            refreshFeed(following);
+            refreshFeed(myFriends);
           }}
           unlockedKeys={unlockedKeys}
           user={user}
@@ -2244,10 +2296,9 @@ export default function App() {
       {showFindFriends && (
         <FindFriends
           currentUserId={user.id}
-          following={following}
+          {...friendProps}
           onClose={() => setShowFindFriends(false)}
           onOpenProfile={openProfile}
-          onToggleFollow={toggleFollow}
         />
       )}
       {showTour && <Tour onFinish={finishTour} onShowTab={switchTab} />}

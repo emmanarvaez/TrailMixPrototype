@@ -64,7 +64,7 @@ export type HikeLog = {
 // One row of the notifications table, with what's needed to show it
 export type AppNotification = {
   id: string;
-  type: "follow" | "like" | "comment" | "tag" | "reply";
+  type: "like" | "comment" | "tag" | "reply" | "friend_request" | "friend_accept";
   actorId: string;
   logId: string | null;
   commentId: string | null;

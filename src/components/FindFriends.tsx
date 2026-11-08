@@ -1,19 +1,20 @@
 import { useState } from "react";
 import PeopleList from "./PeopleList";
 import { usePeopleSearch } from "./usePeopleSearch";
+import type { FriendAction, FriendState } from "../lib/db";
 import type { Friend } from "../types";
 
-// Bottom sheet for finding people by username or name and following them
+// Bottom sheet for finding people by username or name and sending them friend requests
 export default function FindFriends({
   currentUserId,
-  following,
-  onToggleFollow,
+  friendState,
+  onFriendAction,
   onOpenProfile,
   onClose,
 }: {
   currentUserId: string;
-  following: string[];
-  onToggleFollow: (person: Friend) => void;
+  friendState: FriendState;
+  onFriendAction: (person: Friend, action: FriendAction) => void;
   onOpenProfile: (id: string) => void;
   onClose: () => void;
 }) {
@@ -46,9 +47,9 @@ export default function FindFriends({
           )}
           <PeopleList
             currentUserId={currentUserId}
-            following={following}
+            friendState={friendState}
+            onFriendAction={onFriendAction}
             onOpenProfile={onOpenProfile}
-            onToggleFollow={onToggleFollow}
             people={results}
           />
         </div>

@@ -16,6 +16,8 @@ type PostsContextValue = {
   /** Your own posts only. Rejects (and changes nothing) if Supabase refuses. */
   setPostArchived: (id: string, archived: boolean) => Promise<void>;
   deletePost: (id: string) => Promise<void>;
+  /** Drops loaded hikes by these users, e.g. after they stop being friends. */
+  forgetAuthors: (userIds: string[]) => void;
 };
 
 export const PostsContext = createContext<PostsContextValue | null>(null);
@@ -92,7 +94,13 @@ export function usePostsStore(
     onPostsChanged();
   };
 
+  const forgetAuthors = useCallback(
+    (userIds: string[]) =>
+      setPosts((current) => Object.fromEntries(Object.entries(current).filter(([, post]) => !userIds.includes(post.friend.id)))),
+    [],
+  );
+
   const reset = useCallback(() => setPosts({}), []);
 
-  return { value: { posts, loadPosts, toggleLike, toggleSave, addComment, setPostArchived, deletePost }, reset };
+  return { value: { posts, loadPosts, toggleLike, toggleSave, addComment, setPostArchived, deletePost, forgetAuthors }, reset };
 }

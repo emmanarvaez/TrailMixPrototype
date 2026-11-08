@@ -1,5 +1,7 @@
 import type { KeyboardEvent, ReactNode } from "react";
+import PeopleList from "./PeopleList";
 import { handle, useUsers } from "../context/UsersContext";
+import type { FriendAction, FriendState } from "../lib/db";
 import type { AppNotification, Friend } from "../types";
 
 // A row on the page: one notification, or all the likes on one hike grouped together
@@ -11,6 +13,8 @@ function groupRows(notifications: AppNotification[]): Row[] {
   const rows: Row[] = [];
   const likesByHike = new Map<string, Row>();
   for (const item of notifications) { // newest first
+    // Pending requests are listed in their own section at the top, with Accept and Decline
+    if (item.type === "friend_request") continue;
     if (item.type === "like" && item.logId) {
       const existing = likesByHike.get(item.logId);
       if (existing) {
@@ -55,21 +59,24 @@ function Avatar({ person }: { person: Friend }) {
 export default function Notifications({
   notifications,
   loadError,
-  following,
-  onToggleFollow,
+  currentUserId,
+  friendState,
+  onFriendAction,
   onOpenProfile,
   onOpenPost,
 }: {
   notifications: AppNotification[] | null; // newest first; null while loading
   loadError: string;
-  following: string[];
-  onToggleFollow: (person: Friend) => void;
+  currentUserId: string;
+  friendState: FriendState; // the signed-in user's friends and requests
+  onFriendAction: (person: Friend, action: FriendAction) => void;
   onOpenProfile: (id: string) => void;
   onOpenPost: (logId: string, commentId?: string) => void;
 }) {
   const { getUser } = useUsers();
   const now = new Date();
   const rows = groupRows(notifications ?? []);
+  const requests = friendState.incoming.map(getUser);
   const sections = (["Today", "This week", "Earlier"] as const)
     .map((title) => ({ title, rows: rows.filter((row) => sectionOf(row.latest.createdAt, now) === title) }))
     .filter((section) => section.rows.length > 0);
@@ -89,7 +96,7 @@ export default function Notifications({
     const item = row.latest;
     const actor = getUser(item.actorId);
     const trail = item.trailName ? <> at <b>{item.trailName}</b></> : null;
-    if (item.type === "follow") return <>{personLink(actor)} started following you</>;
+    if (item.type === "friend_accept") return <>{personLink(actor)} accepted your friend request</>;
     if (item.type === "comment") {
       const text = item.commentText ?? "";
       return <>{personLink(actor)} commented: “{text.length > 60 ? `${text.slice(0, 60).trimEnd()}…` : text}”</>;
@@ -111,7 +118,7 @@ export default function Notifications({
 
   const open = (row: Row) => {
     const item = row.latest;
-    if (item.type === "follow" || !item.logId) onOpenProfile(item.actorId);
+    if (item.type === "friend_accept" || !item.logId) onOpenProfile(item.actorId);
     else onOpenPost(item.logId, item.type === "comment" || item.type === "reply" ? item.commentId ?? undefined : undefined);
   };
 
@@ -120,7 +127,19 @@ export default function Notifications({
       <h1 className="notifications-title">Notifications</h1>
       {loadError && <p className="trail-search-note" role="alert">Couldn't load notifications: {loadError}</p>}
       {!loadError && notifications === null && <p className="trail-search-note">Loading…</p>}
-      {notifications !== null && rows.length === 0 && !loadError && (
+      {requests.length > 0 && (
+        <section aria-label="Friend requests" className="notif-section friend-requests">
+          <h2>Friend requests <span className="friend-request-count">{requests.length}</span></h2>
+          <PeopleList
+            currentUserId={currentUserId}
+            friendState={friendState}
+            onFriendAction={onFriendAction}
+            onOpenProfile={onOpenProfile}
+            people={requests}
+          />
+        </section>
+      )}
+      {notifications !== null && rows.length === 0 && requests.length === 0 && !loadError && (
         <div className="profile-empty notifications-empty">
           <img alt="" className="profile-empty-cashew" src="/assets/cashew-11-sleepy.svg" />
           <h2>No activity yet</h2>
@@ -133,7 +152,6 @@ export default function Notifications({
           {section.rows.map((row) => {
             const item = row.latest;
             const actor = getUser(item.actorId);
-            const isFollowing = following.includes(item.actorId);
             return (
               <div
                 className={`notif-row ${row.unread ? "unread" : ""}`}
@@ -154,16 +172,7 @@ export default function Notifications({
                 <p className="notif-text">
                   {describe(row)} <time dateTime={item.createdAt}>{timeAgo(item.createdAt, now)}</time>
                 </p>
-                {item.type === "follow" ? (
-                  <button
-                    aria-pressed={isFollowing}
-                    className={`notif-follow ${isFollowing ? "following" : ""}`}
-                    onClick={(event) => { event.stopPropagation(); onToggleFollow(actor); }}
-                    type="button"
-                  >
-                    {isFollowing ? "Following" : "Follow back"}
-                  </button>
-                ) : item.thumbnail ? (
+                {item.thumbnail ? (
                   item.thumbnail.type === "video" ? (
                     <video className="notif-thumb" muted playsInline preload="metadata" src={`${item.thumbnail.url}#t=0.1`} />
                   ) : (
