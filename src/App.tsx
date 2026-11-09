@@ -82,9 +82,13 @@ function getResultVariant(rank: number, total: number): MascotVariant {
   return "not-for-me";
 }
 
-// New users start with the first few ingredients; each logged hike unlocks the next one
-// (saved to user_ingredients, keyed by detailOptions[i].shape).
+// New users start with the first few ingredients; every HIKES_PER_UNLOCK saved hikes unlock
+// the next one (saved to user_ingredients, keyed by detailOptions[i].shape).
 const STARTER_INGREDIENTS = 3;
+const HIKES_PER_UNLOCK = 2;
+
+// Whether saving a hike that brings the user's total to `totalHikes` earns a new ingredient
+const earnsUnlock = (totalHikes: number) => totalHikes > 0 && totalHikes % HIKES_PER_UNLOCK === 0;
 
 function unlockedIndexes(unlockedKeys: string[]): Set<number> {
   const unlocked = new Set<number>();
@@ -1409,6 +1413,8 @@ function Result({
   lowerRanking,
   previousShapes,
   unlockIndex,
+  hikesBefore,
+  collectionComplete,
   jarOwner,
   isFirstHike,
   onRestart,
@@ -1420,6 +1426,8 @@ function Result({
   lowerRanking: string[];
   previousShapes: string[]; // ingredients from the user's earlier hikes, already in the jar
   unlockIndex: number | null; // ingredient this hike unlocked, if any
+  hikesBefore: number; // saved hikes before this one
+  collectionComplete: boolean; // every ingredient is unlocked, counting this hike's
   jarOwner: string;
   isFirstHike: boolean;
   onRestart: () => void;
@@ -1466,11 +1474,25 @@ function Result({
               {choices.map((choice, index) => (
                 <Ingredient className={`new-piece new-piece-${index % 3}`} key={choice.ingredient} type={choice.shape} />
               ))}
+              {newlyUnlocked && <Ingredient className="new-piece unlock-piece" type={newlyUnlocked.shape} />}
             </div>
             <div className="jar-label"><b>TRAIL</b><span>MIX</span><small>{jarOwner}'s jar</small></div>
           </div>
+          {/* The newly unlocked ingredient drops in once the progress bar fills */}
+          {newlyUnlocked && (
+            <div className="falling-wrap unlock-drop">
+              <Ingredient className="falling-ingredient" type={newlyUnlocked.shape} />
+              <span className="ingredient-label">New: {newlyUnlocked.ingredient}!</span>
+            </div>
+          )}
           <div className="ground-shadow" />
         </div>
+        <UnlockProgress
+          collectionComplete={collectionComplete}
+          hikes={hikesBefore + 1}
+          previousHikes={hikesBefore}
+          unlocked={newlyUnlocked}
+        />
         <div className="rank-result">
           <span>{trail.name} is</span>
           <b>#{rank}</b>
@@ -1537,6 +1559,77 @@ function Result({
         <Button onClick={onRestart}>Done</Button>
       </div>
     </Shell>
+  );
+}
+
+// Progress toward the next ingredient, shown under the jar. With `previousHikes` (the
+// "Into the mix!" screen) it animates from before this hike to after it: filling up,
+// celebrating an unlock, then resetting for the next ingredient.
+function UnlockProgress({
+  hikes,
+  previousHikes,
+  unlocked,
+  collectionComplete,
+}: {
+  hikes: number; // saved hikes, including the one just logged
+  previousHikes?: number;
+  unlocked?: (typeof detailOptions)[number] | null; // ingredient the latest hike unlocked
+  collectionComplete: boolean; // every ingredient is unlocked
+}) {
+  const animating = previousHikes !== undefined;
+  type Phase = "before" | "filled" | "reset";
+  const [phase, setPhase] = useState<Phase>(animating ? "before" : "reset");
+
+  useEffect(() => {
+    if (!animating) return;
+    const timers = [window.setTimeout(() => setPhase("filled"), 700)];
+    if (unlocked) timers.push(window.setTimeout(() => setPhase("reset"), 4600));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [animating, unlocked]);
+
+  const shown = phase === "before" ? previousHikes ?? hikes : hikes;
+  const step = shown % HIKES_PER_UNLOCK;
+  const celebrating = !!unlocked && phase === "filled";
+  const percent = celebrating ? 100 : (step / HIKES_PER_UNLOCK) * 100;
+
+  if (collectionComplete && !celebrating) {
+    return (
+      <div className="unlock-progress complete" role="status">
+        <p><b>Collection complete!</b> You've unlocked every ingredient.</p>
+      </div>
+    );
+  }
+
+  const remaining = HIKES_PER_UNLOCK - step;
+  const message = celebrating
+    ? "New ingredient unlocked!"
+    : step === 0
+      ? `Complete ${HIKES_PER_UNLOCK} hikes to unlock your next ingredient!`
+      : `Just ${remaining} more hike${remaining === 1 ? "" : "s"} to unlock your next ingredient!`;
+
+  return (
+    <div className={`unlock-progress ${celebrating ? "celebrating" : ""}`}>
+      <div
+        aria-label="Progress to your next ingredient"
+        aria-valuemax={HIKES_PER_UNLOCK}
+        aria-valuemin={0}
+        aria-valuenow={celebrating ? HIKES_PER_UNLOCK : step}
+        className="unlock-progress-track"
+        role="progressbar"
+      >
+        <span
+          className={`unlock-progress-fill ${phase === "reset" && animating ? "resetting" : ""}`}
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <div className="unlock-progress-meta">
+        <p role="status">
+          {celebrating && unlocked && <img alt="" src={unlocked.icon} />}
+          <span>{celebrating && unlocked ? <><b>{message}</b> {unlocked.ingredient} is in your jar.</> : message}</span>
+        </p>
+        <span>{celebrating ? HIKES_PER_UNLOCK : step}/{HIKES_PER_UNLOCK} hikes</span>
+      </div>
+    </div>
   );
 }
 
@@ -1746,6 +1839,7 @@ function Accomplishments({
             </div>
             <div className="ground-shadow" />
           </div>
+          <UnlockProgress collectionComplete={nextUnlockIndex(unlockedKeys) === null} hikes={totalHikes} />
           <div className="accom-ingredient-categories">
             <div className="accom-ingredient-grid">
               {detailOptions.map((opt, idx) => {
@@ -2354,7 +2448,16 @@ function LogHikeFlow({
   const [taggedIds, setTaggedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const [saved, setSaved] = useState<{ logId: string; unlockIndex: number | null; previousShapes: string[]; isFirstHike: boolean } | null>(null);
+  const [saved, setSaved] = useState<{
+    logId: string;
+    unlockIndex: number | null;
+    hikesBefore: number;
+    collectionComplete: boolean;
+    previousShapes: string[];
+    isFirstHike: boolean;
+  } | null>(null);
+  // Blocks a second Save while the first is still running (a double tap would post the hike twice)
+  const savingRef = useRef(false);
   const [sharing, setSharing] = useState(false); // showing the story card after "Done"
 
   const go = (next: number) => {
@@ -2386,10 +2489,14 @@ function LogHikeFlow({
   };
 
   const save = async () => {
+    if (savingRef.current || saved) return;
+    savingRef.current = true;
     setSaving(true);
     setSaveError("");
     try {
-      const unlockIndex = nextUnlockIndex(unlockedKeys);
+      // Only saved hikes count, so progress always matches what's in Supabase
+      const hikesBefore = (myLogs ?? []).length;
+      const unlockIndex = earnsUnlock(hikesBefore + 1) ? nextUnlockIndex(unlockedKeys) : null;
       const logId = await saveHikeLog({
         userId: user.id,
         trailId: trail.id,
@@ -2404,12 +2511,21 @@ function LogHikeFlow({
         myLogs: myLogs ?? [],
         unlockedIngredient: unlockIndex !== null ? detailOptions[unlockIndex].shape : null,
       });
-      setSaved({ logId, unlockIndex, previousShapes: hikeShapes(myLogs ?? []), isFirstHike: (myLogs ?? []).length === 0 });
+      const keysAfter = unlockIndex !== null ? [...unlockedKeys, detailOptions[unlockIndex].shape] : unlockedKeys;
+      setSaved({
+        logId,
+        unlockIndex,
+        hikesBefore,
+        collectionComplete: nextUnlockIndex(keysAfter) === null,
+        previousShapes: hikeShapes(myLogs ?? []),
+        isFirstHike: hikesBefore === 0,
+      });
       onSaved();
       go(5);
     } catch (error) {
       setSaveError(`Couldn't save your hike: ${message(error)}`);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -2463,6 +2579,8 @@ function LogHikeFlow({
       rank={[...ranking, ...lowerRanking].indexOf(trail.name) + 1}
       ranking={ranking}
       trail={trail}
+      collectionComplete={saved.collectionComplete}
+      hikesBefore={saved.hikesBefore}
       unlockIndex={saved.unlockIndex}
     />
   );

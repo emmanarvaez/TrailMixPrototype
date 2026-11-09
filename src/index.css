@@ -902,3 +902,30 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 .profile-friends .friend-requests .profile-friend-row:last-child { border-bottom: 0; }
 .profile-locked { margin-top: 8px; }
 .profile-stats { grid-template-columns: repeat(2, 1fr); }
+
+/* ── Progress toward the next ingredient (under the jar) ── */
+.unlock-progress { width: min(100%, 320px); margin: 6px auto 18px; text-align: left; }
+.unlock-progress-track { height: 12px; overflow: hidden; border-radius: 99px; background: #e6dfcd; box-shadow: inset 0 1px 2px rgba(58,44,30,.12); }
+.unlock-progress-fill {
+  display: block; height: 100%; border-radius: inherit; background: var(--orange);
+  box-shadow: inset 0 -2px rgba(108,50,28,.18); transition: width .8s cubic-bezier(.3,.7,.3,1);
+}
+.unlock-progress-fill.resetting { transition-duration: .45s; }
+.unlock-progress-meta { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-top: 7px; }
+.unlock-progress-meta p { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--forest); font-family: "Inter:Semi Bold"; font-size: 12.5px; line-height: 1.35; }
+.unlock-progress-meta p b { font-family: "Inter:Bold"; font-weight: normal; color: var(--orange); }
+.unlock-progress-meta p img { width: 26px; height: 26px; flex: none; object-fit: contain; animation: iconPop .45s ease; }
+.unlock-progress-meta > span { flex: none; color: var(--muted); font-size: 11px; padding-top: 1px; }
+.unlock-progress.celebrating .unlock-progress-track { animation: unlockGlow 1.2s ease-in-out 2; }
+.unlock-progress.complete { padding: 11px 14px; border-radius: 14px; background: var(--pale-sage); text-align: center; }
+.unlock-progress.complete p { margin: 0; color: var(--forest); font-size: 13px; }
+.unlock-progress.complete b { font-family: "Inter:Bold"; font-weight: normal; }
+.accom-jar-stage + .unlock-progress { margin-top: 14px; }
+
+/* The newly unlocked ingredient drops into the jar after the bar fills */
+.falling-wrap.unlock-drop { z-index: 9; animation-delay: 1.6s; }
+.falling-wrap.unlock-drop .ingredient-label { background: var(--orange); }
+.falling-wrap.unlock-drop .falling-ingredient { filter: drop-shadow(0 0 6px rgba(241,189,78,.9)); }
+.new-piece.unlock-piece { left: 128px; bottom: 80px; animation-delay: 3s; filter: drop-shadow(0 0 5px rgba(241,189,78,.85)); }
+
+@keyframes unlockGlow { 0%, 100% { box-shadow: inset 0 1px 2px rgba(58,44,30,.12); } 50% { box-shadow: 0 0 0 4px rgba(241,189,78,.45); } }
