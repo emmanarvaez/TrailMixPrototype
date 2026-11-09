@@ -1167,7 +1167,19 @@ function AddDetails({
   onBack: () => void;
 }) {
   const mediaInput = useRef<HTMLInputElement>(null);
+  const ingredientsRef = useRef<HTMLDivElement>(null);
   const [mediaNote, setMediaNote] = useState("");
+  // Shown after trying to save without choosing an ingredient; cleared once one is picked
+  const [needsIngredient, setNeedsIngredient] = useState(false);
+
+  const save = () => {
+    if (selectedDetails.length === 0) {
+      setNeedsIngredient(true);
+      ingredientsRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    onSave();
+  };
   const previews = useMemo(
     () => media.map((file) => ({ url: URL.createObjectURL(file), isVideo: file.type.startsWith("video/") })),
     [media],
@@ -1300,7 +1312,7 @@ function AddDetails({
             </div>
           )}
         </div>
-        <div className="field-group">
+        <div className="field-group" ref={ingredientsRef}>
           <div className="section-heading"><h2>What made this one?</h2><span>Select multiple</span></div>
           {/* Change 6: explain what ingredients are for */}
           <p className="unlock-note" style={{ marginBottom: 4 }}>
@@ -1318,6 +1330,7 @@ function AddDetails({
                   key={option.label}
                   onClick={() => {
                     if (isLocked) return;
+                    if (!isSelected) setNeedsIngredient(false);
                     setSelectedDetails(
                       isSelected
                         ? selectedDetails.filter((item) => item !== index)
@@ -1338,6 +1351,9 @@ function AddDetails({
               );
             })}
           </div>
+          {needsIngredient && selectedDetails.length === 0 && (
+            <p className="media-note" role="alert">Choose at least one ingredient before saving your hike.</p>
+          )}
         </div>
         {selectedDetails.length > 0 && (
           <Mascot
@@ -1355,7 +1371,7 @@ function AddDetails({
         )}
       </section>
       <div className="sticky-action">
-        <Button disabled={selectedDetails.length === 0 || media.length === 0 || saving} onClick={onSave}>
+        <Button disabled={media.length === 0 || saving} onClick={save}>
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>
@@ -2332,7 +2348,7 @@ function LogHikeFlow({
   const [ranking, setRanking] = useState<string[]>([]);
   const [lowerRanking, setLowerRanking] = useState<string[]>([]);
   const [skippedRanking, setSkippedRanking] = useState(false);
-  const [selectedDetails, setSelectedDetails] = useState<number[]>([0]);
+  const [selectedDetails, setSelectedDetails] = useState<number[]>([]);
   const [media, setMedia] = useState<File[]>([]);
   const [caption, setCaption] = useState("");
   const [taggedIds, setTaggedIds] = useState<string[]>([]);
@@ -2427,7 +2443,7 @@ function LogHikeFlow({
     setCaption("");
     setMedia([]);
     setTaggedIds([]);
-    setSelectedDetails([0]);
+    setSelectedDetails([]);
     setSelectedTrail(null);
     setSaved(null);
     setSaveError("");
