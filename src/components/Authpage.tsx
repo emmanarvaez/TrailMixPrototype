@@ -35,15 +35,6 @@ async function loadProfile(): Promise<Profile> {
   });
 }
 
-/** The account Supabase kept signed in from the last visit, or null if there isn't one. */
-export async function restoreSession(): Promise<AuthUser | null> {
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  const authUser = data.session?.user;
-  if (!authUser) return null;
-  return toAuthUser(authUser.id, authUser.email ?? "", await loadProfile());
-}
-
 export default function Authpage({
   onAuthenticated,
 }: {

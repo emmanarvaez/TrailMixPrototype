@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
-import Authpage, { restoreSession, type AuthUser } from "./components/Authpage";
+import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import FindFriends from "./components/FindFriends";
 import HikePost from "./components/HikePost";
@@ -2048,24 +2048,10 @@ export default function App() {
     await resetSeenTips();
     setSeenTips([]);
   };
-  // The splash plays on the way into the app: after signing in or up, and when the app
-  // opens with the account Supabase kept signed in. Logged-out users go straight to sign-in.
+  // The splash plays on the way into the app, right after signing in or up. There's no
+  // automatic sign-in (see lib/supabase.ts), so every visit starts at the sign-in screen.
   const [showSplash, setShowSplash] = useState(false);
-  const [restoring, setRestoring] = useState(true); // checking for a kept session on open
   const hideSplash = useCallback(() => setShowSplash(false), []);
-  useEffect(() => {
-    let cancelled = false;
-    restoreSession()
-      .then((restored) => {
-        if (cancelled || !restored) return;
-        setUser(restored);
-        setUsers((current) => ({ ...current, [restored.id]: profileFromAuth(restored) }));
-        setShowSplash(true);
-      })
-      .catch((error) => console.error("Couldn't restore session", error))
-      .finally(() => { if (!cancelled) setRestoring(false); });
-    return () => { cancelled = true; };
-  }, []);
   const [showFindFriends, setShowFindFriends] = useState(false);
 
   // The signed-in user's own data, all loaded from Supabase
@@ -2353,19 +2339,13 @@ export default function App() {
   if (!user) {
     return (
       <>
-        {/* While checking for a kept session: a plain Trail Dust screen, so a signed-in user
-            never sees the sign-in form flash before their splash */}
-        {restoring ? (
-          <div aria-busy="true" className="launch-backdrop" />
-        ) : (
-          <Authpage
-            onAuthenticated={(next, options) => {
-              setActiveUser(next);
-              if (options?.isNewAccount) setShowTour(true);
-              setShowSplash(true);
-            }}
-          />
-        )}
+        <Authpage
+          onAuthenticated={(next, options) => {
+            setActiveUser(next);
+            if (options?.isNewAccount) setShowTour(true);
+            setShowSplash(true);
+          }}
+        />
         {splash}
       </>
     );
