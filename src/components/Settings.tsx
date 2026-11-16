@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { AuthUser } from "./Authpage";
-import { colorFor, setUsername, updateProfile, uploadAvatar } from "../lib/db";
+import { BIO_MAX_LENGTH, colorFor, saveBio, setUsername, updateProfile, uploadAvatar } from "../lib/db";
 import { supabase } from "../lib/supabase";
 import UsernameField, { useUsernameCheck } from "./UsernameField";
 
@@ -28,7 +28,7 @@ export default function Settings({
   const [value, setValue] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<Field | "photo" | "username" | "tips" | null>(null);
+  const [saved, setSaved] = useState<Field | "photo" | "username" | "tips" | "bio" | null>(null);
   const [tipsError, setTipsError] = useState("");
   const [replaying, setReplaying] = useState(false);
 
@@ -48,6 +48,9 @@ export default function Settings({
   const [usernameError, setUsernameError] = useState("");
   const usernameStatus = useUsernameCheck(newUsername, user.username);
   const [savedMessage, setSavedMessage] = useState("");
+  const [editingBio, setEditingBio] = useState(false);
+  const [bio, setBio] = useState("");
+  const [bioError, setBioError] = useState("");
   const [saving, setSaving] = useState(false);
   const [photoError, setPhotoError] = useState("");
 
@@ -124,6 +127,23 @@ export default function Settings({
     }
   };
 
+  // Saves the bio as typed; "" (or Remove bio) clears it
+  const submitBio = async (next: string) => {
+    setSaving(true);
+    setBioError("");
+    try {
+      const savedBio = await saveBio(user.id, next);
+      onUpdateUser({ bio: savedBio || undefined });
+      setSavedMessage(savedBio ? "Bio saved" : "Bio removed");
+      setSaved("bio");
+      setEditingBio(false);
+    } catch (saveError) {
+      setBioError((saveError as { message?: string })?.message ?? "Couldn't save your bio. Try again?");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const changePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -177,6 +197,47 @@ export default function Settings({
             </button>
           )}
           {saved === "username" && <p className="settings-saved">Username updated</p>}
+        </div>
+        <div className="settings-field">
+          <span className="settings-label">Edit Bio</span>
+          {editingBio ? (
+            <form className="settings-form" noValidate onSubmit={(event) => { event.preventDefault(); submitBio(bio); }}>
+              <textarea
+                aria-describedby="bio-count"
+                aria-label="Bio"
+                autoFocus
+                className="settings-bio-input"
+                maxLength={BIO_MAX_LENGTH}
+                onChange={(event) => { setBio(event.target.value); setBioError(""); }}
+                placeholder="Tell your trail crew a little about yourself"
+                rows={3}
+                value={bio}
+              />
+              <span className={`settings-bio-count ${BIO_MAX_LENGTH - bio.length <= 10 ? "low" : ""}`} id="bio-count">
+                {BIO_MAX_LENGTH - bio.length} characters left
+              </span>
+              {bioError && <p className="settings-error" role="alert">{bioError}</p>}
+              <div className="settings-form-actions">
+                {user.bio && (
+                  <button className="settings-cancel settings-remove" disabled={saving} onClick={() => submitBio("")} type="button">
+                    Remove bio
+                  </button>
+                )}
+                <button className="settings-cancel" onClick={() => setEditingBio(false)} type="button">Cancel</button>
+                <button className="settings-save" disabled={saving} type="submit">{saving ? "Saving…" : "Save"}</button>
+              </div>
+            </form>
+          ) : (
+            <button
+              className="settings-bar"
+              onClick={() => { setEditingBio(true); setBio(user.bio ?? ""); setBioError(""); setSaved(null); }}
+              type="button"
+            >
+              <span className="settings-current">{user.bio || "No bio yet"}</span>
+              <span aria-hidden="true" className="settings-chevron">›</span>
+            </button>
+          )}
+          {saved === "bio" && <p className="settings-saved">{savedMessage}</p>}
         </div>
         {(Object.keys(fieldLabels) as Field[]).map((field) => (
           <div className="settings-field" key={field}>

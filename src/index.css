@@ -1059,3 +1059,16 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
   .lb-pinned { left: 50%; right: auto; width: 398px; transform: translateX(-50%); bottom: calc(24px + var(--nav-h) + 10px); }
 }
 .leaderboard { padding-bottom: 72px; }
+
+/* ── Profile bio ── */
+.profile-bio { margin: 14px 2px 0; color: var(--ink); font-size: 13.5px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.profile-bio.empty { color: #a3a69c; font-style: italic; }
+.profile-bio + .profile-stats { margin-top: 16px; }
+.settings-bio-input {
+  width: 100%; min-height: 84px; padding: 11px 13px; resize: none; outline: 0;
+  border: 1.5px solid #d2cebe; border-radius: 12px; background: white; font-family: "Inter:Regular"; font-size: 14px; line-height: 1.45;
+}
+.settings-bio-input:focus { border-color: var(--forest); }
+.settings-bio-count { align-self: flex-end; margin-top: -2px; color: var(--muted); font-size: 11px; }
+.settings-bio-count.low { color: var(--orange); font-family: "Inter:Semi Bold"; }
+.settings-form-actions .settings-remove { margin-right: auto; color: #a83f2a; border-color: #e4c3b8; }

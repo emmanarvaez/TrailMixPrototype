@@ -154,6 +154,13 @@ export default function Profile({
         )}
       </header>
 
+      {/* Each profile shows its own owner's bio; "No bio yet" is only a hint, never saved */}
+      {profile.bio ? (
+        <p className="profile-bio">{profile.bio}</p>
+      ) : (
+        <p className="profile-bio empty">No bio yet</p>
+      )}
+
       {/* Counts always show a number: 0 while loading or when there's nothing yet */}
       <div aria-label="Profile stats" className="profile-stats">
         <div><b>{canView ? toPosts(ownIds).filter((post) => !post.archived).length : "–"}</b><span>Posts</span></div>

@@ -11,7 +11,9 @@ export const MAX_MEDIA = 20;
 // ─── Profiles ────────────────────────────────────────────────────────────────
 
 // Only public columns: emails and phone numbers are never readable for other users
-type ProfileRow = { id: string; name: string; username: string | null; avatar_url: string | null };
+type ProfileRow = { id: string; name: string; username: string | null; avatar_url: string | null; bio?: string | null };
+
+export const BIO_MAX_LENGTH = 150;
 
 const AVATAR_COLORS = ["#244f3b", "#c2571f", "#6d8b68", "#d5a23e", "#7a4e2a", "#e66a3c", "#4b806b", "#71819a"];
 
@@ -47,10 +49,12 @@ export async function setUsername(userId: string, username: string) {
 }
 
 // The signed-in user's own profile, including the private fields only they can see
-export async function fetchMyProfile(): Promise<{ name: string; username: string | null; avatar_url: string | null; phone: string | null } | null> {
+type MyProfileRow = { name: string; username: string | null; avatar_url: string | null; phone: string | null; bio?: string | null };
+
+export async function fetchMyProfile(): Promise<MyProfileRow | null> {
   const { data, error } = await supabase.rpc("get_my_profile");
   if (error) throw error;
-  return (data as { name: string; username: string | null; avatar_url: string | null; phone: string | null }[])[0] ?? null;
+  return (data as MyProfileRow[])[0] ?? null;
 }
 
 // Cashew's Log a Hike tips the signed-in user has already seen (profiles.seen_tips), kept
@@ -78,17 +82,24 @@ export function toFriend(row: ProfileRow): Friend {
     username: row.username ?? "",
     color: colorFor(row.id),
     avatar: row.avatar_url ?? undefined,
+    bio: row.bio || undefined,
   };
 }
 
 const PROFILE_COLUMNS = "id, name, username, avatar_url";
 
+// Runs a profiles query with the bio column, or without it before 013_bio.sql has been run
+async function selectProfiles(build: (columns: string) => PromiseLike<{ data: unknown; error: { code?: string } | null }>) {
+  let { data, error } = await build(`${PROFILE_COLUMNS}, bio`);
+  if (error?.code === "42703" || error?.code === "42501") ({ data, error } = await build(PROFILE_COLUMNS));
+  if (error) throw error;
+  return (data as ProfileRow[]).map(toFriend);
+}
+
 export async function fetchProfiles(ids: string[]): Promise<Friend[]> {
   const unique = [...new Set(ids)];
   if (!unique.length) return [];
-  const { data, error } = await supabase.from("profiles").select(PROFILE_COLUMNS).in("id", unique);
-  if (error) throw error;
-  return (data as ProfileRow[]).map(toFriend);
+  return selectProfiles((columns) => supabase.from("profiles").select(columns).in("id", unique));
 }
 
 // People matching a username or display name (never email). A leading @ is ignored.
@@ -96,20 +107,32 @@ export async function searchProfiles(query: string, excludeId: string): Promise<
   // Characters that would break the "or" filter or act as wildcards are dropped from the search text
   const text = query.trim().replace(/^@+/, "").replace(/[,()%*\\]/g, " ").trim();
   if (!text) return [];
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PROFILE_COLUMNS)
-    .or(`username.ilike.*${text}*,name.ilike.*${text}*`)
-    .neq("id", excludeId)
-    .order("name")
-    .limit(20);
-  if (error) throw error;
-  return (data as ProfileRow[]).map(toFriend);
+  return selectProfiles((columns) =>
+    supabase
+      .from("profiles")
+      .select(columns)
+      .or(`username.ilike.*${text}*,name.ilike.*${text}*`)
+      .neq("id", excludeId)
+      .order("name")
+      .limit(20),
+  );
 }
 
-export async function updateProfile(userId: string, changes: { phone?: string; avatar_url?: string }) {
+export async function updateProfile(userId: string, changes: { phone?: string; avatar_url?: string; bio?: string | null }) {
   const { error } = await supabase.from("profiles").update(changes).eq("id", userId);
-  if (error) throw error;
+  if (error) {
+    throw error.code === "42703" || error.code === "PGRST204"
+      ? new Error("Bios need 013_bio.sql to be run in Supabase first.")
+      : error;
+  }
+}
+
+// Saves the signed-in user's bio; a blank bio is removed. Returns what was saved ("" when removed).
+export async function saveBio(userId: string, bio: string): Promise<string> {
+  const text = bio.trim();
+  if (text.length > BIO_MAX_LENGTH) throw new Error(`Bios can be at most ${BIO_MAX_LENGTH} characters.`);
+  await updateProfile(userId, { bio: text || null });
+  return text;
 }
 
 function fileExtension(file: File) {

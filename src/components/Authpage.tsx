@@ -10,6 +10,7 @@ export type AuthUser = {
   email: string; // only ever shown to the user themselves
   phone?: string;
   avatar?: string;
+  bio?: string; // missing when they haven't written one
 };
 
 type Profile = Awaited<ReturnType<typeof fetchMyProfile>>;
@@ -25,6 +26,7 @@ function toAuthUser(id: string, email: string, profile: Profile): AuthUser {
     email,
     phone: profile?.phone ?? undefined,
     avatar: profile?.avatar_url ?? undefined,
+    bio: profile?.bio || undefined,
   };
 }
 

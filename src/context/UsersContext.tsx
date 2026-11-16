@@ -12,6 +12,7 @@ export function profileFromAuth(user: AuthUser): Friend {
     username: user.username ?? "",
     color: colorFor(user.id),
     avatar: user.avatar,
+    bio: user.bio,
   };
 }
 

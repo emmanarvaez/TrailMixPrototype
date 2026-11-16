@@ -19,6 +19,7 @@ export type Friend = {
   username: string;
   color: string;
   avatar?: string; // image URL; falls back to the initial on `color`
+  bio?: string; // short public description, at most BIO_MAX_LENGTH characters; missing when blank
 };
 
 // Comments reference their author by user ID, and the name/avatar are looked up

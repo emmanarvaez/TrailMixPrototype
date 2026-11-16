@@ -2183,12 +2183,13 @@ export default function App() {
     };
   }, [userId, refreshFriends]);
 
-  // Someone's profile opened from search or a friends list may not be loaded yet
+  // Load (or refresh) the profile being opened, so its bio, name and photo are current
+  const openedProfileId = view?.kind === "profile" ? view.id : null;
   useEffect(() => {
-    if (view?.kind !== "profile") return;
-    loadRankings([view.id]);
-    if (!users[view.id]) fetchProfiles([view.id]).then(addProfiles).catch((error) => console.error(error));
-  }, [view, users, loadRankings, addProfiles]);
+    if (!openedProfileId) return;
+    loadRankings([openedProfileId]);
+    fetchProfiles([openedProfileId]).then(addProfiles).catch((error) => console.error(error));
+  }, [openedProfileId, loadRankings, addProfiles]);
 
   const switchTab = (next: Tab) => {
     setTab(next);
