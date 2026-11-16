@@ -12,6 +12,38 @@ export type AuthUser = {
   avatar?: string;
 };
 
+type Profile = Awaited<ReturnType<typeof fetchMyProfile>>;
+
+// The signed-in account from its auth record and profile row; the name falls back to the email
+function toAuthUser(id: string, email: string, profile: Profile): AuthUser {
+  const fallbackName = email.split("@")[0].replace(/[._-]+/g, " ")
+    .replace(/\b\w/g, (l) => l.toUpperCase());
+  return {
+    id,
+    name: profile?.name ?? fallbackName,
+    username: profile?.username ?? undefined,
+    email,
+    phone: profile?.phone ?? undefined,
+    avatar: profile?.avatar_url ?? undefined,
+  };
+}
+
+async function loadProfile(): Promise<Profile> {
+  return fetchMyProfile().catch((profileError) => {
+    console.error("Couldn't load profile", profileError);
+    return null;
+  });
+}
+
+/** The account Supabase kept signed in from the last visit, or null if there isn't one. */
+export async function restoreSession(): Promise<AuthUser | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  const authUser = data.session?.user;
+  if (!authUser) return null;
+  return toAuthUser(authUser.id, authUser.email ?? "", await loadProfile());
+}
+
 export default function Authpage({
   onAuthenticated,
 }: {
@@ -88,21 +120,7 @@ export default function Authpage({
         if (!authUser) { setError("Sign-in failed. Please try again."); return; }
 
         // Name, username, photo and phone from the user's own profile
-        const profile = await fetchMyProfile().catch((profileError) => {
-          console.error("Couldn't load profile", profileError);
-          return null;
-        });
-
-        const fallbackName = normalizedEmail.split("@")[0].replace(/[._-]+/g, " ")
-          .replace(/\b\w/g, (l) => l.toUpperCase());
-        onAuthenticated({
-          id: authUser.id,
-          name: profile?.name ?? fallbackName,
-          username: profile?.username ?? undefined,
-          email: normalizedEmail,
-          phone: profile?.phone ?? undefined,
-          avatar: profile?.avatar_url ?? undefined,
-        });
+        onAuthenticated(toAuthUser(authUser.id, normalizedEmail, await loadProfile()));
       }
     } finally {
       setLoading(false);

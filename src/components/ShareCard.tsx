@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
 import { fetchMyLogs, fetchPosts, rankingFrom } from "../lib/db";
-import { detailOptions } from "../lib/ingredients";
+import { ingredientForTag, type IngredientOption } from "../lib/ingredients";
 import LogTips from "./LogTips";
 import type { FeedPost, Media } from "../types";
 
@@ -33,7 +33,7 @@ type CardData = {
   rank: number; // place on the user's mountain
   mountainSize: number; // how many trails are on it
   hikeCount: number; // hikes logged, this one included
-  ingredient: (typeof detailOptions)[number] | null;
+  ingredient: IngredientOption | null;
 };
 
 // Every image on the card as a data URL, so the exported PNG never has to fetch
@@ -153,7 +153,7 @@ async function loadCard(userId: string, logId: string): Promise<{ data: CardData
     rank: log.rank ?? rankingFrom(logs).indexOf(log.trailName) + 1,
     mountainSize: rankingFrom(logs).length,
     hikeCount: logs.length,
-    ingredient: detailOptions.find((option) => option.label === log.highlights[0]) ?? null,
+    ingredient: log.highlights.map(ingredientForTag).find((option) => !!option) ?? null,
   };
   const media = post.media.slice(0, MAX_PHOTOS);
   const [photos, avatar, cashew, logo, wordmarkDark] = await Promise.all([
@@ -205,7 +205,7 @@ function Card({ data, images }: { data: CardData; images: CardImages }) {
       : `${post.trail.name} is #${rank} on my mountain!`;
   const subline = isMilestone
     ? "Keep climbing!"
-    : ingredient ? `+ ${ingredient.ingredient} for the ${ingredient.label.toLowerCase()}` : "";
+    : ingredient ? `+ ${ingredient.ingredient} · ${ingredient.label}` : "";
   return (
     <>
       <PhotoGrid photos={images.photos} />
