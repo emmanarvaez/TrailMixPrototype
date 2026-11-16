@@ -990,6 +990,8 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
   78% { transform: translateY(-3px) scale(.98); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
+/* Shown for a moment on open while a kept session is checked, in the splash's colors */
+.launch-backdrop { position: fixed; inset: 0; background: #f6eedf; }
 
 /* ── Cashew's Log a Hike tips (built on the tour's spotlight and callout) ── */
 .log-tip .tour-skip { font-size: 14px; }

@@ -1,12 +1,12 @@
 import { useEffect, useState, type CSSProperties } from "react";
 
-// The animated splash shown once each time the app opens: Cashew tosses ingredients into
-// the TrailMix jar, then it fades into the app. The whole timeline is CSS animation; the
+// The animated splash shown on the way into the app (after signing in, or opening the app
+// still signed in): Cashew tosses ingredients into the TrailMix jar, then it fades into the app. The whole timeline is CSS animation; the
 // final frame is the resting state, so skipping (a tap, or "reduce motion") just turns
 // the animations off. If the app isn't ready when it ends, it holds on that frame.
 
 // Ingredients Cashew tosses, in order
-const TOSSES = ["chocolate", "almonds", "cranberries", "pistachios", "pretzel", "nuts"];
+const TOSSES = ["chocolate-chips", "almonds", "raisins", "sunflower-seeds", "chocolate", "pretzel"];
 
 // Timeline in ms
 const FIRST_TOSS = 450;

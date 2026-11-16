@@ -2031,9 +2031,10 @@ export default function App() {
     await resetSeenTips();
     setSeenTips([]);
   };
-  // The splash plays once per app open while the account Supabase kept signed in is restored
-  const [showSplash, setShowSplash] = useState(true);
-  const [restoring, setRestoring] = useState(true);
+  // The splash plays on the way into the app: after signing in or up, and when the app
+  // opens with the account Supabase kept signed in. Logged-out users go straight to sign-in.
+  const [showSplash, setShowSplash] = useState(false);
+  const [restoring, setRestoring] = useState(true); // checking for a kept session on open
   const hideSplash = useCallback(() => setShowSplash(false), []);
   useEffect(() => {
     let cancelled = false;
@@ -2042,6 +2043,7 @@ export default function App() {
         if (cancelled || !restored) return;
         setUser(restored);
         setUsers((current) => ({ ...current, [restored.id]: profileFromAuth(restored) }));
+        setShowSplash(true);
       })
       .catch((error) => console.error("Couldn't restore session", error))
       .finally(() => { if (!cancelled) setRestoring(false); });
@@ -2308,6 +2310,7 @@ export default function App() {
 
   const signOut = () => {
     supabase.auth.signOut().catch((error) => console.error("Sign out failed", error));
+    setShowSplash(false);
     setUser(null);
     setUsers({});
     setTab("feed");
@@ -2327,18 +2330,25 @@ export default function App() {
   };
 
   // Rendered second in a fragment in every branch below, so it keeps playing (rather than
-  // restarting) when a restored session switches the screen behind it
-  const splash = showSplash && <Splash onDone={hideSplash} ready={!restoring} />;
+  // restarting) if the screen behind it changes
+  const splash = showSplash && <Splash onDone={hideSplash} ready />;
 
   if (!user) {
     return (
       <>
-        <Authpage
-          onAuthenticated={(next, options) => {
-            setActiveUser(next);
-            if (options?.isNewAccount) setShowTour(true);
-          }}
-        />
+        {/* While checking for a kept session: a plain Trail Dust screen, so a signed-in user
+            never sees the sign-in form flash before their splash */}
+        {restoring ? (
+          <div aria-busy="true" className="launch-backdrop" />
+        ) : (
+          <Authpage
+            onAuthenticated={(next, options) => {
+              setActiveUser(next);
+              if (options?.isNewAccount) setShowTour(true);
+              setShowSplash(true);
+            }}
+          />
+        )}
         {splash}
       </>
     );
