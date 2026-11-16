@@ -109,9 +109,11 @@ export default function HikePost({ post, focusCommentId }: { post: FeedPost; foc
   const { trail } = post;
   // The author's latest profile, so a changed username or photo shows on older posts too
   const friend = users[post.friend.id] ?? post.friend;
-  // The poster's own ranking, read live so it follows any later re-ranking
+  // Each person's own ranking of this trail, read live so it follows any later re-ranking:
+  // the poster's, and beside it on someone else's post the viewer's if they've hiked it too
+  const isMine = post.friend.id === currentUser.id;
   const rank = getRank(friend.id, trail.name);
-  const mountainOwner = friend.id === currentUser.id ? "your" : "their";
+  const myRank = isMine || rank === null ? null : getRank(currentUser.id, trail.name);
 
   const submitComment = (event: FormEvent) => {
     event.preventDefault();
@@ -125,8 +127,6 @@ export default function HikePost({ post, focusCommentId }: { post: FeedPost; foc
       setCommentError("Couldn't post your comment. Try again?");
     });
   };
-
-  const isMine = post.friend.id === currentUser.id;
 
   const runAction = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -209,9 +209,16 @@ export default function HikePost({ post, focusCommentId }: { post: FeedPost; foc
       <div className="post-photo" onDoubleClick={likeFromPhoto}>
         <MediaCarousel label={`${friend.name} on ${trail.name}`} media={post.media} />
         {rank !== null && (
-          <span className="post-rank-tag">
-            <b>#{rank}</b> on {mountainOwner} mountain
-          </span>
+          <div className="post-rank-tags">
+            <span className="post-rank-tag">
+              <b>#{rank}</b> on {isMine ? "your" : "their"} mountain
+            </span>
+            {myRank !== null && (
+              <span className="post-rank-tag mine">
+                <b>#{myRank}</b> on yours
+              </span>
+            )}
+          </div>
         )}
         {burst > 0 && (
           <span className="like-burst" key={burst}>
