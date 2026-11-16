@@ -53,6 +53,24 @@ export async function fetchMyProfile(): Promise<{ name: string; username: string
   return (data as { name: string; username: string | null; avatar_url: string | null; phone: string | null }[])[0] ?? null;
 }
 
+// Cashew's Log a Hike tips the signed-in user has already seen (profiles.seen_tips), kept
+// in Supabase so they don't repeat on another device. See supabase/010_seen_tips.sql.
+export async function fetchSeenTips(): Promise<string[]> {
+  const { data, error } = await supabase.rpc("get_my_seen_tips");
+  if (error) throw error;
+  return (data as string[] | null) ?? [];
+}
+
+export async function markTipsSeen(tips: string[]) {
+  const { error } = await supabase.rpc("mark_tips_seen", { tips });
+  if (error) throw error;
+}
+
+export async function resetSeenTips() {
+  const { error } = await supabase.rpc("reset_seen_tips");
+  if (error) throw error;
+}
+
 export function toFriend(row: ProfileRow): Friend {
   return {
     id: row.id,

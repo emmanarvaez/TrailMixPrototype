@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toBlob } from "html-to-image";
 import { fetchMyLogs, fetchPosts, rankingFrom } from "../lib/db";
 import { ingredientForTag, type IngredientOption } from "../lib/ingredients";
+import LogTips from "./LogTips";
 import type { FeedPost, Media } from "../types";
 
 // A 9:16 story card shown after a hike is posted, made to be saved or shared to
@@ -366,8 +367,10 @@ export default function ShareCard({ userId, logId, onClose }: { userId: string; 
 
       {card && error && <p className="share-error">{error}</p>}
 
+      {/* Cashew's tip once the image is ready to download */}
+      <LogTips ids={["log-share"]} ready={!!png} />
       <div className="share-actions">
-        <button className="share-button" disabled={!png} onClick={download} type="button">
+        <button className="share-button" data-tip="share-download" disabled={!png} onClick={download} type="button">
           {png ? "Download" : "Preparing…"}
         </button>
         {shareable && (
