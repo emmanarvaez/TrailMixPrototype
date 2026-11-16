@@ -45,6 +45,9 @@ export type FeedPost = {
   saved: boolean;
   comments: PostComment[];
   taggedUserIds: string[];
+  // The ingredient tags picked when this hike was logged (detailOptions labels, e.g. "Waterfall"),
+  // in the order picked. Only this hike's own choices, never the user's whole collection.
+  ingredientTags: string[];
   archived: boolean; // archived posts are hidden from everyone but their owner
 };
 

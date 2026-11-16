@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { toTrail } from "./trails";
 import { trailPlaceholder } from "./trailArt";
+import { ingredientForTag } from "./ingredients";
 import type { AppNotification, FeedPost, Friend, HikeLog, Media, PostComment } from "../types";
 
 // Everything the app reads from or writes to Supabase for the signed-in user.
@@ -240,6 +241,7 @@ type PostRow = {
   trail_name: string | null;
   date: string;
   caption: string | null;
+  highlight: string | null; // this hike's ingredient tags, e.g. "Waterfall, Sunset"
   trails: Parameters<typeof toTrail>[0] | null;
   log_photos: { url: string; sort_order: number; media_type: "image" | "video" | null }[];
   log_tags: { tag: string }[];
@@ -248,7 +250,16 @@ type PostRow = {
 };
 
 const POST_COLUMNS =
-  "id, user_id, trail_name, date, caption, created_at, trails(*), log_photos(url, sort_order, media_type), log_tags(tag), comments(id, user_id, body, created_at), likes(user_id)";
+  "id, user_id, trail_name, date, caption, highlight, created_at, trails(*), log_photos(url, sort_order, media_type), log_tags(tag), comments(id, user_id, body, created_at), likes(user_id)";
+
+// A hike's saved tags as current ingredient labels (older tag names are mapped, unknown ones dropped)
+function postIngredientTags(highlight: string | null): string[] {
+  const labels = (highlight ?? "")
+    .split(",")
+    .map((tag) => ingredientForTag(tag.trim())?.label)
+    .filter((label): label is string => !!label);
+  return [...new Set(labels)];
+}
 
 // Posts by these users or with these IDs, newest first, plus the profiles of everyone
 // who appears in them (authors and commenters) so names and avatars can be shown
@@ -299,6 +310,7 @@ export async function fetchPosts(
         .sort((a, b) => a.created_at.localeCompare(b.created_at))
         .map((comment): PostComment => ({ id: comment.id, authorId: comment.user_id, text: comment.body })),
       taggedUserIds: row.log_tags.map((tag) => tag.tag),
+      ingredientTags: postIngredientTags(row.highlight),
       archived: !!row.archived_at,
     };
   });

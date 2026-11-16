@@ -13,6 +13,7 @@ import Profile from "./components/Profile";
 import Settings from "./components/Settings";
 import Splash from "./components/Splash";
 import ShareCard from "./components/ShareCard";
+import { FeedFilterContext } from "./context/FeedFilterContext";
 import { PostsContext, usePostsStore } from "./context/PostsContext";
 import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
 import {
@@ -2019,6 +2020,8 @@ export default function App() {
   document.title = "TrailMix";
   const [tab, setTab] = useState<Tab>("feed");
   const [showSettings, setShowSettings] = useState(false);
+  // Ingredient filters on the Feed (labels like "Waterfall"); a post matches ANY of them
+  const [ingredientFilters, setIngredientFilters] = useState<string[]>([]);
   const [user, setUser] = useState<AuthUser | null>(null);
   const userId = user?.id ?? null;
   // Every profile loaded so far (post authors, commenters, friends), by user ID
@@ -2198,6 +2201,19 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
+  // Tapping an ingredient tag on any post filters the Feed by it and shows the Feed
+  const feedFilters = {
+    filters: ingredientFilters,
+    addFilter: (label: string) => {
+      setIngredientFilters((current) => (current.includes(label) ? current : [...current, label]));
+      if (tab !== "feed" || views.length) switchTab("feed");
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    },
+    toggleFilter: (label: string) =>
+      setIngredientFilters((current) => (current.includes(label) ? current.filter((item) => item !== label) : [...current, label])),
+    clearFilters: () => setIngredientFilters([]),
+  };
+
   const pushView = (next: Omit<View, "scrollY">) => {
     if (view && view.kind === next.kind && view.id === next.id) return;
     const scrollY = window.scrollY; // read now: the updater below runs after the scroll to top
@@ -2313,6 +2329,7 @@ export default function App() {
   };
 
   const signOut = () => {
+    setIngredientFilters([]);
     supabase.auth.signOut().catch((error) => console.error("Sign out failed", error));
     setShowSplash(false);
     setUser(null);
@@ -2389,6 +2406,7 @@ export default function App() {
       }}
     >
     <PostsContext.Provider value={postsValue}>
+    <FeedFilterContext.Provider value={feedFilters}>
       {view?.kind === "profile" && (
         <Shell onBack={goBack}>
           <Profile
@@ -2534,6 +2552,7 @@ export default function App() {
         />
       )}
       {showTour && <Tour onFinish={finishTour} onShowTab={switchTab} />}
+    </FeedFilterContext.Provider>
     </PostsContext.Provider>
     </UsersContext.Provider>
     {splash}

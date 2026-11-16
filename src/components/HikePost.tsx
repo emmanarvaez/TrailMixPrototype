@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useFeedFilters } from "../context/FeedFilterContext";
 import { usePosts } from "../context/PostsContext";
+import { ingredientForTag } from "../lib/ingredients";
 import { handle, useUsers } from "../context/UsersContext";
 import type { FeedPost, Friend, Media } from "../types";
 
@@ -101,6 +103,9 @@ export default function HikePost({ post, focusCommentId }: { post: FeedPost; foc
   const [commentError, setCommentError] = useState("");
   const { currentUser, users, getUser, getRank, openProfile } = useUsers();
   const { toggleLike, toggleSave, addComment, setPostArchived, deletePost } = usePosts();
+  const { filters, addFilter } = useFeedFilters();
+  // Only the ingredients picked for this hike, with their icons
+  const ingredients = post.ingredientTags.map(ingredientForTag).filter((option) => !!option);
   // Your own posts get a ⋯ menu to archive or delete them
   const [menu, setMenu] = useState<"closed" | "open" | "confirm-delete">("closed");
   const [busy, setBusy] = useState(false);
@@ -265,6 +270,28 @@ export default function HikePost({ post, focusCommentId }: { post: FeedPost; foc
       </div>
 
       <div className="post-body">
+        {ingredients.length > 0 && (
+          <div aria-label="Ingredients on this hike" className="post-ingredients">
+            {ingredients.map((option) => {
+              const active = filters.includes(option.label);
+              return (
+                <button
+                  aria-label={`Show hikes with ${option.label} (${option.ingredient})`}
+                  aria-pressed={active}
+                  className={`post-ingredient ${active ? "active" : ""}`}
+                  key={option.label}
+                  onClick={(event) => { event.stopPropagation(); addFilter(option.label); }}
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  title={`${option.ingredient}: tap to find more ${option.label.toLowerCase()} hikes`}
+                  type="button"
+                >
+                  <img alt="" src={option.icon} />
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="post-counts">
           <b>{plural(post.likes, "like")}</b>
           <button onClick={() => setShowComments((open) => !open)} type="button">
