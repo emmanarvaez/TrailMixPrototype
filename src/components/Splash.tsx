@@ -13,9 +13,10 @@ const FIRST_TOSS = 450;
 const TOSS_GAP = 160;
 const FLIGHT = 420;
 const LAST_LANDING = FIRST_TOSS + TOSS_GAP * (TOSSES.length - 1) + FLIGHT;
-const TIMELINE_END = LAST_LANDING + 400; // after the one-liner fades in
+const FINAL_HOLD = 800; // a beat on the finished frame before fading into the app
+const TIMELINE_END = LAST_LANDING + 400 + FINAL_HOLD; // the one-liner fades in, then the hold
 const REDUCED_MOTION_HOLD = 1000;
-const FADE_OUT = 350;
+const FADE_OUT = 600;
 
 // Each landing adds three pieces to the mix (17 slots in the jar's CSS), bottom row first
 const SLOTS = Array.from({ length: 17 }, (_, slot) => ({ slot, toss: Math.min(Math.floor(slot / 3), TOSSES.length - 1) }));
