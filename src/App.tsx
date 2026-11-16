@@ -4,6 +4,7 @@ import Authpage, { type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import FindFriends from "./components/FindFriends";
 import HikePost from "./components/HikePost";
+import LogTips, { TipsContext } from "./components/LogTips";
 import MountainScene from "./components/MountainScene";
 import Notifications from "./components/Notifications";
 import PickUsername from "./components/PickUsername";
@@ -16,6 +17,9 @@ import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
 import {
   EMPTY_FRIEND_STATE,
   MAX_MEDIA,
+  fetchSeenTips,
+  markTipsSeen,
+  resetSeenTips,
   fetchFriendState,
   fetchNotifications,
   fetchUnreadCount,
@@ -838,12 +842,13 @@ function TrailSelect({
   return (
     <Shell step={1}>
       <section className="screen-content trail-screen">
+        <LogTips ids={["log-trail-search"]} />
         <div className="screen-title">
           <span className="eyebrow">Pick your path</span>
           <h1>Which trail did you hike</h1>
         </div>
         <Mascot variant="default" />
-        <label className="search-field">
+        <label className="search-field" data-tip="trail-search">
           <span aria-hidden="true">⌕</span>
           <input onChange={(event) => setQuery(event.target.value)} placeholder="Search trails" value={query} />
         </label>
@@ -912,6 +917,7 @@ function RateTrail({
   return (
     <Shell onBack={onBack} step={2}>
       <section className="screen-content rate-screen">
+        <LogTips ids={["log-reaction", "log-difficulty"]} />
         <div className="hero-photo">
           <img alt={`View from ${trail.name}`} src={trail.image} />
           <span className="photo-sticker">Today · {trail.area ?? "Orange County"}</span>
@@ -921,7 +927,7 @@ function RateTrail({
           <span className="eyebrow">{trail.name}</span>
           <h1>How was it?</h1>
         </div>
-        <div className="rating-list">
+        <div className="rating-list" data-tip="reaction">
           {ratings.map((item) => (
             <button className={`rating-card ${rating === item.label ? "selected" : ""}`} key={item.label} onClick={() => setRating(item.label)}>
               <span className="rating-icon" style={{ background: item.color }}>{item.icon}</span>
@@ -930,7 +936,7 @@ function RateTrail({
             </button>
           ))}
         </div>
-        <div className="difficulty-field">
+        <div className="difficulty-field" data-tip="difficulty">
           <div className="section-heading">
             <h2 id="difficulty-heading">How difficult was it?</h2>
           </div>
@@ -1047,6 +1053,7 @@ function RankTrail({
   return (
     <Shell onBack={onBack} step={3}>
       <section className="screen-content rank-screen">
+        <LogTips ids={["log-mountain"]} />
         <div className="screen-title">
           <span className="eyebrow">Your personal peaks</span>
           <h1>{showLowerRanks ? "Rank it with the rest" : "Place it on your mountain"}</h1>
@@ -1054,7 +1061,7 @@ function RankTrail({
         </div>
         {!showLowerRanks ? (
           <>
-            <div className="mountain-scene">
+            <div className="mountain-scene" data-tip="mountain">
               <div className="sun-disc" />
               <div className="cloud cloud-one" />
               <div className="cloud cloud-two" />
@@ -1175,6 +1182,8 @@ function AddDetails({
   const [mediaNote, setMediaNote] = useState("");
   // Shown after trying to save without choosing an ingredient; cleared once one is picked
   const [needsIngredient, setNeedsIngredient] = useState(false);
+  // The first locked ingredient, for Cashew's tip about locked cards
+  const firstLocked = detailOptions.findIndex((_, index) => !unlocked.has(index));
 
   const save = () => {
     if (selectedDetails.length === 0) {
@@ -1220,6 +1229,7 @@ function AddDetails({
   return (
     <Shell onBack={onBack} step={4}>
       <section className="screen-content details-screen">
+        <LogTips ids={["log-photos", "log-caption", "log-tag", "log-ingredients", "log-ingredients-locked"]} />
         <div className="screen-title compact">
           <span className="eyebrow">{trailName}</span>
           <h1>Add details</h1>
@@ -1231,7 +1241,7 @@ function AddDetails({
           </div>
           <div className="photo-row">
             {media.length < MAX_MEDIA && (
-              <button className="add-photo" onClick={() => mediaInput.current?.click()} type="button">
+              <button className="add-photo" data-tip="add-photo" onClick={() => mediaInput.current?.click()} type="button">
                 <span>+</span><small>Add</small>
               </button>
             )}
@@ -1262,13 +1272,13 @@ function AddDetails({
           </div>
           {(mediaNote || missing) && <p className="media-note">{mediaNote || missing}</p>}
         </div>
-        <label className="text-field">
+        <label className="text-field" data-tip="caption">
           <span>Caption</span>
           <textarea maxLength={140} onChange={(event) => setCaption(event.target.value)} placeholder="What do you want to remember?" value={caption} />
           <small>{caption.length}/140</small>
         </label>
         {/* Change 3: tag friends with filter → chip → remove */}
-        <div className="friend-field">
+        <div className="friend-field" data-tip="tag-friends">
           <span>Tag Friends</span>
           <div className="friend-search">
             <span className="mini-avatar">+</span>
@@ -1323,13 +1333,14 @@ function AddDetails({
             Each hike adds an ingredient to your trail mix jar. Your jar shows what kind of hiker you are.
           </p>
           {/* Change 4 + 5: bigger vertical chips, locked state */}
-          <div className="detail-grid">
+          <div className="detail-grid" data-tip="ingredients">
             {detailOptions.map((option, index) => {
               const isLocked = !unlocked.has(index);
               const isSelected = selectedDetails.includes(index);
               return (
                 <button
                   className={`detail-chip ${isSelected ? "selected" : ""} ${isLocked ? "locked" : ""}`}
+                  data-tip={isLocked && index === firstLocked ? "locked-ingredient" : undefined}
                   disabled={isLocked}
                   key={option.label}
                   onClick={() => {
@@ -1438,6 +1449,13 @@ function Result({
   // Change 7: newly unlocked ingredient (none once everything is unlocked)
   const newlyUnlocked = unlockIndex !== null ? detailOptions[unlockIndex] : null;
 
+  // Cashew's jar tip waits for the jar to fill, and for the unlock celebration to finish
+  const [jarSettled, setJarSettled] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setJarSettled(true), newlyUnlocked ? 4900 : 1900);
+    return () => window.clearTimeout(timer);
+  }, [newlyUnlocked]);
+
   // Stats
   const totalHikes = ranking.length + lowerRanking.length;
   const miles = trail.distance || "—";
@@ -1453,12 +1471,13 @@ function Result({
     // No back button: the hike is already saved, so going back could only post it twice
     <Shell step={5}>
       <section className="screen-content result-screen">
+        <LogTips ids={["log-jar"]} ready={jarSettled} />
         <div className="result-copy">
           <span className="eyebrow">Hike logged</span>
           <h1>Into the mix!</h1>
           <p>{choices.map((choice) => choice.ingredient).join(", ")} added to your growing collection.</p>
         </div>
-        <div className="jar-stage">
+        <div className="jar-stage" data-tip="jar">
           <div className="reaction-burst"><span>!</span></div>
           {choices.map((choice, index) => (
             <div className={`falling-wrap fall-${index % 3}`} key={choice.ingredient}>
@@ -1487,12 +1506,14 @@ function Result({
           )}
           <div className="ground-shadow" />
         </div>
-        <UnlockProgress
-          collectionComplete={collectionComplete}
-          hikes={hikesBefore + 1}
-          previousHikes={hikesBefore}
-          unlocked={newlyUnlocked}
-        />
+        <div data-tip="jar-progress">
+          <UnlockProgress
+            collectionComplete={collectionComplete}
+            hikes={hikesBefore + 1}
+            previousHikes={hikesBefore}
+            unlocked={newlyUnlocked}
+          />
+        </div>
         <div className="rank-result">
           <span>{trail.name} is</span>
           <b>#{rank}</b>
@@ -1954,6 +1975,29 @@ export default function App() {
   const [users, setUsers] = useState<Record<string, Friend>>({});
   // Only set by a successful sign-up, so returning users who sign in never see the tour
   const [showTour, setShowTour] = useState(false);
+  // Cashew's Log a Hike tips this user has seen, from Supabase; null while loading
+  const [seenTips, setSeenTips] = useState<string[] | null>(null);
+  useEffect(() => {
+    setSeenTips(null);
+    if (!userId) return;
+    let cancelled = false;
+    fetchSeenTips()
+      .then((tips) => { if (!cancelled) setSeenTips(tips); })
+      .catch((error) => {
+        // Before supabase/010_seen_tips.sql is run: tips still show, remembered for this visit
+        console.error("Couldn't load seen tips", error);
+        if (!cancelled) setSeenTips([]);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
+  const markSeen = useCallback((ids: string[]) => {
+    setSeenTips((current) => [...new Set([...(current ?? []), ...ids])]);
+    markTipsSeen(ids).catch((error) => console.error("Couldn't save seen tips", error));
+  }, []);
+  const replayTips = async () => {
+    await resetSeenTips();
+    setSeenTips([]);
+  };
   const [showFindFriends, setShowFindFriends] = useState(false);
 
   // The signed-in user's own data, all loaded from Supabase
@@ -2359,7 +2403,7 @@ export default function App() {
       )}
       {tab === "profile" && showSettings && (
         <Shell onBack={() => setShowSettings(false)}>
-          <Settings onSignOut={signOut} onUpdateUser={(changes) => setActiveUser({ ...user, ...changes })} user={user} />
+          <Settings onReplayTips={replayTips} onSignOut={signOut} onUpdateUser={(changes) => setActiveUser({ ...user, ...changes })} user={user} />
         </Shell>
       )}
       {tab === "profile" && !showSettings && (
@@ -2389,6 +2433,7 @@ export default function App() {
       </div>
       {/* Kept mounted while hidden so an in-progress log survives tab switches. */}
       <div hidden={tab !== "log"}>
+        <TipsContext.Provider value={{ seen: seenTips, active: tab === "log" && !showTour, markSeen }}>
         <LogHikeFlow
           friends={friends}
           myLogs={myLogs}
@@ -2401,6 +2446,7 @@ export default function App() {
           unlockedKeys={unlockedKeys}
           user={user}
         />
+        </TipsContext.Provider>
       </div>
       <BottomNav active={tab} onChange={switchTab} />
       {showFindFriends && (

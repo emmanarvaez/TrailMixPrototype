@@ -16,17 +16,33 @@ export default function Settings({
   user,
   onUpdateUser,
   onSignOut,
+  onReplayTips,
 }: {
   user: AuthUser;
   onUpdateUser: (changes: Partial<AuthUser>) => void;
   onSignOut: () => void;
+  onReplayTips: () => Promise<void>; // Cashew's Log a Hike tips show again
 }) {
   const fileInput = useRef<HTMLInputElement>(null);
   const [editing, setEditing] = useState<Field | null>(null);
   const [value, setValue] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState<Field | "photo" | "username" | null>(null);
+  const [saved, setSaved] = useState<Field | "photo" | "username" | "tips" | null>(null);
+  const [tipsError, setTipsError] = useState("");
+  const [replaying, setReplaying] = useState(false);
+
+  const replayTips = () => {
+    setReplaying(true);
+    setTipsError("");
+    onReplayTips()
+      .then(() => setSaved("tips"))
+      .catch((replayError) => {
+        console.error("Couldn't reset tips", replayError);
+        setTipsError("Couldn't reset your tips. Try again?");
+      })
+      .finally(() => setReplaying(false));
+  };
   const [editingUsername, setEditingUsername] = useState(false);
   const [newUsername, setNewUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
@@ -201,6 +217,15 @@ export default function Settings({
             {saved === field && <p className="settings-saved">{savedMessage}</p>}
           </div>
         ))}
+        <div className="settings-field">
+          <span className="settings-label">Cashew's tips</span>
+          <button className="settings-bar" disabled={replaying} onClick={replayTips} type="button">
+            <span className="settings-current">{replaying ? "Resetting…" : "Replay tips"}</span>
+            <span aria-hidden="true" className="settings-chevron">›</span>
+          </button>
+          {saved === "tips" && <p className="settings-saved">Cashew will show the Log a Hike tips again</p>}
+          {tipsError && <p className="settings-error" role="alert">{tipsError}</p>}
+        </div>
       </div>
       <button className="auth-signout settings-signout" onClick={onSignOut} type="button">Sign out</button>
     </section>

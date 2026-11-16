@@ -933,3 +933,12 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 .new-piece.unlock-piece { left: 128px; bottom: 80px; animation-delay: 3s; filter: drop-shadow(0 0 5px rgba(241,189,78,.85)); }
 
 @keyframes unlockGlow { 0%, 100% { box-shadow: inset 0 1px 2px rgba(58,44,30,.12); } 50% { box-shadow: 0 0 0 4px rgba(241,189,78,.45); } }
+
+/* ── Cashew's Log a Hike tips (built on the tour's spotlight and callout) ── */
+.log-tip .tour-skip { font-size: 14px; }
+.log-tip-got-it {
+  display: block; pointer-events: auto; margin: 10px 0 0 auto; min-height: 36px; padding: 0 16px;
+  border: 0; border-radius: 18px; background: var(--forest); color: #fffaf0;
+  font-family: "Inter:Semi Bold"; font-size: 14px;
+}
+.log-tip-got-it:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
