@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import BottomNav, { type Tab } from "./components/BottomNav";
-import Authpage, { type AuthUser } from "./components/Authpage";
+import Authpage, { restoreSession, type AuthUser } from "./components/Authpage";
 import Feed from "./components/Feed";
 import FindFriends from "./components/FindFriends";
 import HikePost from "./components/HikePost";
@@ -10,6 +10,7 @@ import PickUsername from "./components/PickUsername";
 import Tour from "./components/Tour";
 import Profile from "./components/Profile";
 import Settings from "./components/Settings";
+import Splash from "./components/Splash";
 import ShareCard from "./components/ShareCard";
 import { PostsContext, usePostsStore } from "./context/PostsContext";
 import { UsersContext, handle, profileFromAuth } from "./context/UsersContext";
@@ -1954,6 +1955,22 @@ export default function App() {
   const [users, setUsers] = useState<Record<string, Friend>>({});
   // Only set by a successful sign-up, so returning users who sign in never see the tour
   const [showTour, setShowTour] = useState(false);
+  // The splash plays once per app open while the account Supabase kept signed in is restored
+  const [showSplash, setShowSplash] = useState(true);
+  const [restoring, setRestoring] = useState(true);
+  const hideSplash = useCallback(() => setShowSplash(false), []);
+  useEffect(() => {
+    let cancelled = false;
+    restoreSession()
+      .then((restored) => {
+        if (cancelled || !restored) return;
+        setUser(restored);
+        setUsers((current) => ({ ...current, [restored.id]: profileFromAuth(restored) }));
+      })
+      .catch((error) => console.error("Couldn't restore session", error))
+      .finally(() => { if (!cancelled) setRestoring(false); });
+    return () => { cancelled = true; };
+  }, []);
   const [showFindFriends, setShowFindFriends] = useState(false);
 
   // The signed-in user's own data, all loaded from Supabase
@@ -2233,20 +2250,32 @@ export default function App() {
     resetPosts();
   };
 
+  // Rendered second in a fragment in every branch below, so it keeps playing (rather than
+  // restarting) when a restored session switches the screen behind it
+  const splash = showSplash && <Splash onDone={hideSplash} ready={!restoring} />;
+
   if (!user) {
     return (
-      <Authpage
-        onAuthenticated={(next, options) => {
-          setActiveUser(next);
-          if (options?.isNewAccount) setShowTour(true);
-        }}
-      />
+      <>
+        <Authpage
+          onAuthenticated={(next, options) => {
+            setActiveUser(next);
+            if (options?.isNewAccount) setShowTour(true);
+          }}
+        />
+        {splash}
+      </>
     );
   }
 
   // Accounts from before usernames pick one first, before anything else
   if (!user.username) {
-    return <PickUsername name={user.name} onPicked={(username) => setActiveUser({ ...user, username })} userId={user.id} />;
+    return (
+      <>
+        <PickUsername name={user.name} onPicked={(username) => setActiveUser({ ...user, username })} userId={user.id} />
+        {splash}
+      </>
+    );
   }
 
   const finishTour = (next?: Tab) => {
@@ -2266,6 +2295,7 @@ export default function App() {
   const feedPosts = feedIds === null ? null : feedIds.map((id) => postsValue.posts[id]).filter((post) => !!post);
 
   return (
+    <>
     <UsersContext.Provider
       value={{
         currentUser: me,
@@ -2414,6 +2444,8 @@ export default function App() {
       {showTour && <Tour onFinish={finishTour} onShowTab={switchTab} />}
     </PostsContext.Provider>
     </UsersContext.Provider>
+    {splash}
+    </>
   );
 }
 

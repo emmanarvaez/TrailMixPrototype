@@ -929,3 +929,60 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 .new-piece.unlock-piece { left: 128px; bottom: 80px; animation-delay: 3s; filter: drop-shadow(0 0 5px rgba(241,189,78,.85)); }
 
 @keyframes unlockGlow { 0%, 100% { box-shadow: inset 0 1px 2px rgba(58,44,30,.12); } 50% { box-shadow: 0 0 0 4px rgba(241,189,78,.45); } }
+
+/* ── Splash (plays once when the app opens) ── */
+/* Laid out at 372px wide and scaled down to fit. The resting styles are the final frame;
+   .splash-still turns the animations off to jump straight there. */
+.splash {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  background: #f6eedf; cursor: pointer; touch-action: manipulation;
+  transition: opacity var(--fade-out) ease;
+}
+.splash-leaving { opacity: 0; pointer-events: none; }
+.splash-still * { animation: none !important; }
+.splash-content { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; transform-origin: center; }
+.splash-logo { width: 172px; height: auto; animation: splashIn 350ms ease-out both; }
+.splash-stage { position: relative; width: 100%; height: 330px; margin-top: 40px; }
+.splash-jar { position: absolute; right: 0; bottom: 0; width: 212px; height: 330px; animation: splashIn 350ms ease-out both; }
+.splash-jar .ground-shadow { width: 230px; }
+.splash-jar .jar-lid {
+  transform-origin: 100% 100%;
+  animation: splashLidOpen 220ms 350ms ease-out both, splashLidClose 320ms var(--close-at) forwards;
+}
+.splash-piece { position: absolute; width: 30px; height: 30px; object-fit: contain; filter: drop-shadow(0 2px 0 rgba(63,44,28,.18)); animation: splashPop 380ms both; }
+/* Cashew stands left of the jar; a little bob each time he tosses */
+.splash-cashew {
+  position: absolute; z-index: 6; left: 0; bottom: 4px; width: 200px; height: auto;
+  transform-origin: 60% 100%;
+  animation: splashIn 350ms ease-out both, splashToss var(--toss-gap) var(--toss-at) ease-in-out var(--tosses);
+}
+/* Each ingredient flies from Cashew's raised paw over the jar's open mouth: the outer span
+   moves it across, the image moves it up and down, which together trace an arc */
+.splash-fly { position: absolute; z-index: 7; left: 129px; top: 265px; width: 30px; height: 30px; animation-name: splashFlyX; animation-timing-function: linear; animation-fill-mode: both; }
+.splash-fly img { display: block; width: 30px; height: 30px; object-fit: contain; opacity: 0; animation-name: splashFlyY; animation-fill-mode: both; }
+.splash-line { margin: 20px 0 0; color: var(--forest); font-family: "Inter:Semi Bold"; font-size: 18px; letter-spacing: -.3px; animation: splashFade 320ms ease-out both; }
+
+@keyframes splashIn { from { opacity: 0; translate: 0 10px; } }
+@keyframes splashFade { from { opacity: 0; translate: 0 6px; } }
+@keyframes splashToss { 0%, 100% { transform: rotate(0); } 40% { transform: rotate(-5deg) translateY(-5px); } }
+@keyframes splashLidOpen { from { transform: translateX(-50%); } to { transform: translateX(-50%) translateY(-6px) rotate(26deg); } }
+@keyframes splashLidClose {
+  0% { transform: translateX(-50%) translateY(-6px) rotate(26deg); }
+  70% { transform: translateX(-50%) translateY(-2px) rotate(-3deg); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes splashFlyX { from { transform: translateX(0); } to { transform: translateX(112px); } }
+@keyframes splashFlyY {
+  0% { opacity: 0; transform: translateY(0) rotate(0) scale(.7); animation-timing-function: ease-out; }
+  8% { opacity: 1; }
+  50% { transform: translateY(-252px) rotate(200deg) scale(1); animation-timing-function: ease-in; }
+  88% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-200px) rotate(360deg) scale(.8); }
+}
+@keyframes splashPop {
+  0% { opacity: 0; transform: translateY(-46px) scale(.6); }
+  55% { opacity: 1; transform: translateY(3px) scale(1.08); }
+  78% { transform: translateY(-3px) scale(.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
