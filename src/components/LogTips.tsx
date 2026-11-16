@@ -56,7 +56,7 @@ type TipsContextValue = {
 export const TipsContext = createContext<TipsContextValue | null>(null);
 
 const GUTTER = 16; // keep the callout this far from the screen edges
-const TOP_BAR = 64; // room for the "Skip tips" link
+const TOP_BAR = 24; // keep the callout clear of the top edge
 const GAP = 12; // between the spotlight and the callout
 const PAD = 6; // spotlight padding around the element
 const CALLOUT_ESTIMATE = 210; // before the callout has been measured
@@ -219,13 +219,14 @@ function TipOverlay({ tip, onDone, onSkip }: { tip: Tip; onDone: () => void; onS
       {/* Blocks taps on the page behind: only "Got it" (or "Skip tips") closes the tip */}
       <div aria-hidden="true" className="tour-catcher log-tip-catcher" />
 
-      <button className="tour-skip" onClick={onSkip} type="button">Skip tips</button>
-
       <div className={`tour-callout ${placement} mascot-${mascotSide}`} ref={calloutRef} style={{ ...calloutStyle, left, width }}>
         <img alt="Cashew the squirrel" className="tour-mascot" src={poses[tip.pose]} />
         <div aria-live="polite" className="tour-bubble">
           {tip.text}
-          <button className="log-tip-got-it" onClick={onDone} ref={gotIt} type="button">Got it</button>
+          <span className="log-tip-actions">
+            <button className="tour-skip-inline" onClick={onSkip} type="button">Skip tips</button>
+            <button className="log-tip-got-it" onClick={onDone} ref={gotIt} type="button">Got it</button>
+          </span>
           <span className="tour-tail" />
         </div>
       </div>

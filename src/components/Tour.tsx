@@ -29,7 +29,7 @@ const steps: Step[] = [
 ];
 
 const GUTTER = 16; // keep the callout this far from the screen edges
-const TOP_BAR = 60; // room for the Skip link
+const TOP_BAR = 24; // keep the callout clear of the top edge
 const MASCOT_W = window.innerWidth <= 360 ? 104 : 136; // keep in step with .tour-mascot
 const NAV_SPOT = 84; // diameter of the raised white circle behind a nav tab
 
@@ -168,15 +168,14 @@ export default function Tour({
       {/* Catches every tap so nothing behind the tour can be pressed */}
       <div aria-hidden="true" className="tour-catcher" onClick={next} />
 
-      {!isLast && (
-        <button className="tour-skip" onClick={() => onFinish()} type="button">Skip</button>
-      )}
-
       {!step.target && (
         <div className="tour-center" key={`center-${index}`}>
           <div aria-live="polite" className="tour-bubble">
             {step.text}
             {!isLast && <small>Tap anywhere to continue</small>}
+            {!isLast && (
+              <button className="tour-skip-inline" onClick={() => onFinish()} type="button">Skip tutorial</button>
+            )}
             <span className="tour-tail" />
           </div>
           <img alt="Cashew the squirrel" src={poses[step.pose]} />
@@ -203,6 +202,7 @@ export default function Tour({
           <div aria-live="polite" className="tour-bubble">
             {step.text}
             <small>Tap anywhere to continue</small>
+            <button className="tour-skip-inline" onClick={() => onFinish()} type="button">Skip tutorial</button>
             <span className="tour-tail" />
           </div>
         </div>

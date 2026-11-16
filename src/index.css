@@ -603,18 +603,22 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
   animation: tourPop .3s ease both;
 }
 .tour-nav-tab svg { width: 26px; height: 26px; }
-.tour-skip {
-  position: absolute; z-index: 2; top: calc(10px + env(safe-area-inset-top)); right: 10px;
-  min-height: 44px; padding: 0 16px; border: 0; border-radius: 22px; background: rgba(255, 250, 240, .14);
-  color: #fffaf0; font-family: "Inter:Semi Bold"; font-size: 15px;
-}
-.tour-skip:focus-visible, .tour-link:focus-visible { outline: 2px solid #fffaf0; outline-offset: 2px; }
+.tour-link:focus-visible { outline: 2px solid #fffaf0; outline-offset: 2px; }
 .tour-bubble {
   position: relative; background: #fffcf7; border: 1.5px solid #d4b48a; border-radius: 16px;
   padding: 12px 15px 11px; box-shadow: 0 8px 22px rgba(0, 0, 0, .22);
   color: #3a2c1e; font-family: "Inter:Semi Bold"; font-size: 16px; line-height: 1.38;
 }
 .tour-bubble small { display: block; margin-top: 7px; color: #8a7e70; font-family: "Inter:Regular"; font-size: 12px; }
+/* "Skip tutorial" / "Skip tips" inside Cashew's bubble */
+.tour-skip-inline {
+  display: block; pointer-events: auto; min-height: 36px; margin: 2px 0 -6px -2px; padding: 0 2px;
+  border: 0; background: transparent; color: #8a7e70;
+  font-family: "Inter:Semi Bold"; font-size: 13px; text-decoration: underline; text-underline-offset: 3px;
+}
+.log-tip-actions .tour-skip-inline { margin: 0; }
+.tour-center .tour-skip-inline { margin: 2px auto -6px; }
+.tour-skip-inline:focus-visible { outline: 2px solid var(--forest); outline-offset: 2px; }
 .tour-tail {
   position: absolute; width: 14px; height: 14px; background: #fffcf7; border: 1.5px solid #d4b48a; transform: rotate(45deg);
 }
@@ -992,9 +996,10 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
 }
 
 /* ── Cashew's Log a Hike tips (built on the tour's spotlight and callout) ── */
-.log-tip .tour-skip { font-size: 14px; }
+/* "Skip tips" and "Got it" share a row at the bottom of the bubble */
+.log-tip-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
 .log-tip-got-it {
-  display: block; pointer-events: auto; margin: 10px 0 0 auto; min-height: 36px; padding: 0 16px;
+  display: block; pointer-events: auto; min-height: 36px; padding: 0 16px;
   border: 0; border-radius: 18px; background: var(--forest); color: #fffaf0;
   font-family: "Inter:Semi Bold"; font-size: 14px;
 }
