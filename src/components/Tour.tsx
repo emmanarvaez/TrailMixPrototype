@@ -22,7 +22,7 @@ const steps: Step[] = [
   { tab: "feed", pose: "celebrate", text: "Hey, I'm Cashew! Let me show you around." },
   { tab: "feed", target: "nav-log", pose: "hiker", text: "Just finished a hike? Log it here!" },
   { tab: "accomplishments", target: "mountain", pose: "summit", text: "You'll place each hike on your mountain. Your favorite sits at the summit." },
-  { tab: "accomplishments", target: "nav-accomplishments", pose: "stuffed-cheeks", text: "Every hike earns an ingredient for your jar. Views get chocolate, climbs get almonds, and more!" },
+  { tab: "accomplishments", target: "nav-accomplishments", pose: "stuffed-cheeks", text: "Every hike earns an ingredient for your jar: scenery = cashews, rocky = pretzels, and more. Each hike unlocks a new one!" },
   { tab: "feed", target: "nav-feed", pose: "loved-it", text: "This is where you see your friends' hikes. Like and comment away!" },
   { tab: "profile", target: "nav-profile", pose: "default", text: "Your profile shows your mountain and your mix." },
   { tab: "feed", pose: "celebrate", text: "That's it! Go log your first hike." },

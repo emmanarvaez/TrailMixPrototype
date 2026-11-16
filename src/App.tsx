@@ -35,7 +35,7 @@ import {
   type FriendState,
 } from "./lib/db";
 import { supabase } from "./lib/supabase";
-import { detailOptions } from "./lib/ingredients";
+import { detailOptions, ingredientForTag, type IngredientOption } from "./lib/ingredients";
 import { searchTrails } from "./lib/trails";
 import type { AppNotification, Friend, HikeLog, Trail } from "./types";
 
@@ -83,32 +83,35 @@ function getResultVariant(rank: number, total: number): MascotVariant {
   return "not-for-me";
 }
 
-// New users start with the first few ingredients; every HIKES_PER_UNLOCK saved hikes unlock
-// the next one (saved to user_ingredients, keyed by detailOptions[i].shape).
+// New users start with the first few ingredients and every saved hike unlocks the next one,
+// saved to user_ingredients (keyed by detailOptions[i].shape). The first 3 + hikes logged
+// always count as unlocked too, so the jar matches the hike count even if a save was missed.
 const STARTER_INGREDIENTS = 3;
-const HIKES_PER_UNLOCK = 2;
 
-// Whether saving a hike that brings the user's total to `totalHikes` earns a new ingredient
-const earnsUnlock = (totalHikes: number) => totalHikes > 0 && totalHikes % HIKES_PER_UNLOCK === 0;
-
-function unlockedIndexes(unlockedKeys: string[]): Set<number> {
+function unlockedIndexes(unlockedKeys: string[], hikes: number): Set<number> {
   const unlocked = new Set<number>();
   detailOptions.forEach((option, index) => {
-    if (index < STARTER_INGREDIENTS || unlockedKeys.includes(option.shape)) unlocked.add(index);
+    if (index < STARTER_INGREDIENTS + hikes || unlockedKeys.includes(option.shape)) unlocked.add(index);
   });
   return unlocked;
 }
 
-function nextUnlockIndex(unlockedKeys: string[]): number | null {
-  const unlocked = unlockedIndexes(unlockedKeys);
+function nextUnlockIndex(unlockedKeys: string[], hikes: number): number | null {
+  const unlocked = unlockedIndexes(unlockedKeys, hikes);
   const index = detailOptions.findIndex((_, i) => !unlocked.has(i));
   return index === -1 ? null : index;
+}
+
+// "Unlocks after 2 more hikes" for a locked ingredient: one unlocks with each hike, in order
+function unlockHint(index: number, unlocked: Set<number>): string {
+  const hikes = detailOptions.filter((_, i) => i <= index && !unlocked.has(i)).length;
+  return `Unlocks after ${hikes} more hike${hikes === 1 ? "" : "s"}`;
 }
 
 // Shapes of the ingredients picked on each hike
 function hikeShapes(logs: HikeLog[]): string[] {
   return logs.flatMap((log) =>
-    log.highlights.map((label) => detailOptions.find((option) => option.label === label)?.shape).filter((shape): shape is string => !!shape),
+    log.highlights.map((tag) => ingredientForTag(tag)?.shape).filter((shape): shape is string => !!shape),
   );
 }
 
@@ -245,6 +248,15 @@ function GlobalStyles() {
         align-items: center;
         gap: 1px;
       }
+      .detail-chip .chip-tag {
+        font-family: "Inter:Regular";
+        font-weight: normal;
+        color: var(--muted);
+      }
+      .detail-chip.locked small {
+        font-size: 10px;
+        line-height: 1.25;
+      }
 
       /* ── Change 5: locked ingredients ── */
       .detail-chip.locked {
@@ -311,31 +323,36 @@ function GlobalStyles() {
         gap: 12px;
         background: #fff8f0;
         border-radius: 14px;
-        padding: 12px 14px;
-        margin: 16px 16px 0;
+        padding: 10px 14px 10px 8px;
+        margin: 4px 16px 14px;
+        animation: iconPop .45s 1.6s ease both;
       }
-      .new-unlock-img {
-        width: 44px;
-        height: 44px;
-        object-fit: contain;
+      .new-unlock-cashew {
+        width: 84px;
+        height: auto;
         flex-shrink: 0;
       }
-      .new-unlock-copy small {
-        display: block;
-        font-size: 11px;
-        color: #8a7e70;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-bottom: 3px;
-      }
       .new-unlock-copy b {
-        font-size: 15px;
-        color: #3a2c1e;
         display: block;
+        font-family: "Inter:Bold";
+        font-weight: normal;
+        font-size: 15px;
+        line-height: 1.3;
+        color: #3a2c1e;
       }
       .new-unlock-copy span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
         font-size: 12px;
         color: #8a7e70;
+      }
+      .new-unlock-img {
+        width: 24px;
+        height: 24px;
+        object-fit: contain;
+        flex-shrink: 0;
       }
       .result-stats-row {
         display: flex;
@@ -639,8 +656,33 @@ function GlobalStyles() {
         color: #3a2c1e;
         text-align: center;
       }
+      .accom-key-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .accom-key-heading h3 {
+        margin: 0;
+        font-family: "Inter:Semi Bold";
+        font-size: 16px;
+        color: var(--deep-forest);
+      }
+      .accom-key-heading span {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .accom-ingredient-cell .ai-tag {
+        font-size: 10.5px;
+        color: var(--orange);
+        font-family: "Inter:Semi Bold";
+        text-align: center;
+        line-height: 1.2;
+      }
       .accom-ingredient-cell .ai-count {
         font-size: 10px;
+        text-align: center;
         color: #8a7e70;
       }
       .accom-ingredient-cell .ai-lock {
@@ -1346,11 +1388,11 @@ function AddDetails({
                   {isLocked ? (
                     <span className="lock-badge">🔒</span>
                   ) : (
-                    <img alt={option.ingredient} className="chip-ingredient-img" src={option.icon} />
+                    <img alt="" className="chip-ingredient-img" src={option.icon} />
                   )}
                   <span className="chip-text">
-                    <b>{option.label}</b>
-                    <small>{isLocked ? "Locked" : option.ingredient}</small>
+                    <b>{option.ingredient} <span className="chip-tag">·{"\u00a0"}{option.label}</span></b>
+                    {isLocked && <small>{unlockHint(index, unlocked)}</small>}
                   </span>
                 </button>
               );
@@ -1384,21 +1426,7 @@ function AddDetails({
   );
 }
 
-const ingredientIcons: Record<string, string> = {
-  chocolate:    "/assets/chocolate.svg",
-  "dried-fruit":"/assets/dried-fruit.svg",
-  almonds:      "/assets/almonds.svg",
-  cashew:       "/assets/cashew.svg",
-  cranberries:  "/assets/cranberries.svg",
-  pretzel:      "/assets/pretzel.svg",
-  nuts:         "/assets/nuts.svg",
-  apricot:      "/assets/apricot.svg",
-  banana:       "/assets/banana.svg",
-  date:         "/assets/date.svg",
-  popcorn:      "/assets/popcorn.svg",
-  chex:         "/assets/chex.svg",
-  pistachios:   "/assets/pistachios.svg",
-};
+const ingredientIcons: Record<string, string> = Object.fromEntries(detailOptions.map((option) => [option.shape, option.icon]));
 
 function Ingredient({ type, className = "" }: { type: string; className?: string }) {
   const src = ingredientIcons[type];
@@ -1414,8 +1442,8 @@ function Result({
   lowerRanking,
   previousShapes,
   unlockIndex,
-  hikesBefore,
-  collectionComplete,
+  nextIndex,
+  unlockedCount,
   jarOwner,
   isFirstHike,
   onRestart,
@@ -1427,8 +1455,8 @@ function Result({
   lowerRanking: string[];
   previousShapes: string[]; // ingredients from the user's earlier hikes, already in the jar
   unlockIndex: number | null; // ingredient this hike unlocked, if any
-  hikesBefore: number; // saved hikes before this one
-  collectionComplete: boolean; // every ingredient is unlocked, counting this hike's
+  nextIndex: number | null; // the next ingredient to unlock; null once all are unlocked
+  unlockedCount: number; // ingredients unlocked, counting this hike's
   jarOwner: string;
   isFirstHike: boolean;
   onRestart: () => void;
@@ -1489,11 +1517,23 @@ function Result({
           <div className="ground-shadow" />
         </div>
         <UnlockProgress
-          collectionComplete={collectionComplete}
-          hikes={hikesBefore + 1}
-          previousHikes={hikesBefore}
+          next={nextIndex !== null ? detailOptions[nextIndex] : null}
+          previousCount={newlyUnlocked ? unlockedCount - 1 : unlockedCount}
           unlocked={newlyUnlocked}
+          unlockedCount={unlockedCount}
         />
+        {newlyUnlocked && (
+          <div className="new-unlock-row">
+            <img alt="" className="new-unlock-cashew" src="/assets/cashew-08-celebrate.svg" />
+            <div className="new-unlock-copy">
+              <b>New ingredient unlocked: {newlyUnlocked.ingredient}!</b>
+              <span>
+                <img alt="" className="new-unlock-img" src={newlyUnlocked.icon} />
+                {newlyUnlocked.ingredient} · {newlyUnlocked.label}
+              </span>
+            </div>
+          </div>
+        )}
         <div className="rank-result">
           <span>{trail.name} is</span>
           <b>#{rank}</b>
@@ -1507,17 +1547,6 @@ function Result({
           variant={isFirstHike ? "summit" : resultVariant}
         />
 
-        {/* Change 7: newly unlocked ingredient */}
-        {newlyUnlocked && (
-          <div className="new-unlock-row">
-            <img alt={newlyUnlocked.ingredient} className="new-unlock-img" src={newlyUnlocked.icon} />
-            <div className="new-unlock-copy">
-              <small>New ingredient unlocked</small>
-              <b>{newlyUnlocked.ingredient}</b>
-              <span>for {newlyUnlocked.label.toLowerCase()} on the trail</span>
-            </div>
-          </div>
-        )}
 
         {/* Change 7: quick stats */}
         <div className="result-stats-row">
@@ -1563,37 +1592,36 @@ function Result({
   );
 }
 
-// Progress toward the next ingredient, shown under the jar. With `previousHikes` (the
-// "Into the mix!" screen) it animates from before this hike to after it: filling up,
-// celebrating an unlock, then resetting for the next ingredient.
+// How much of the ingredient collection is unlocked, shown under the jar, and what's next.
+// With `previousCount` (the "Into the mix!" screen) it animates from before this hike to
+// after it: filling up, celebrating an unlock, then naming the next ingredient.
 function UnlockProgress({
-  hikes,
-  previousHikes,
+  unlockedCount,
+  previousCount,
   unlocked,
-  collectionComplete,
+  next,
 }: {
-  hikes: number; // saved hikes, including the one just logged
-  previousHikes?: number;
-  unlocked?: (typeof detailOptions)[number] | null; // ingredient the latest hike unlocked
-  collectionComplete: boolean; // every ingredient is unlocked
+  unlockedCount: number;
+  previousCount?: number;
+  unlocked?: IngredientOption | null; // ingredient the latest hike unlocked
+  next: IngredientOption | null; // unlocks on the next hike; null once all are unlocked
 }) {
-  const animating = previousHikes !== undefined;
-  type Phase = "before" | "filled" | "reset";
-  const [phase, setPhase] = useState<Phase>(animating ? "before" : "reset");
+  const animating = previousCount !== undefined;
+  type Phase = "before" | "filled" | "done";
+  const [phase, setPhase] = useState<Phase>(animating ? "before" : "done");
 
   useEffect(() => {
     if (!animating) return;
     const timers = [window.setTimeout(() => setPhase("filled"), 700)];
-    if (unlocked) timers.push(window.setTimeout(() => setPhase("reset"), 4600));
+    if (unlocked) timers.push(window.setTimeout(() => setPhase("done"), 4600));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [animating, unlocked]);
 
-  const shown = phase === "before" ? previousHikes ?? hikes : hikes;
-  const step = shown % HIKES_PER_UNLOCK;
+  const total = detailOptions.length;
+  const shown = phase === "before" ? previousCount ?? unlockedCount : unlockedCount;
   const celebrating = !!unlocked && phase === "filled";
-  const percent = celebrating ? 100 : (step / HIKES_PER_UNLOCK) * 100;
 
-  if (collectionComplete && !celebrating) {
+  if (!next && !celebrating) {
     return (
       <div className="unlock-progress complete" role="status">
         <p><b>Collection complete!</b> You've unlocked every ingredient.</p>
@@ -1601,34 +1629,30 @@ function UnlockProgress({
     );
   }
 
-  const remaining = HIKES_PER_UNLOCK - step;
-  const message = celebrating
-    ? "New ingredient unlocked!"
-    : step === 0
-      ? `Complete ${HIKES_PER_UNLOCK} hikes to unlock your next ingredient!`
-      : `Just ${remaining} more hike${remaining === 1 ? "" : "s"} to unlock your next ingredient!`;
-
   return (
     <div className={`unlock-progress ${celebrating ? "celebrating" : ""}`}>
       <div
-        aria-label="Progress to your next ingredient"
-        aria-valuemax={HIKES_PER_UNLOCK}
+        aria-label="Ingredients unlocked"
+        aria-valuemax={total}
         aria-valuemin={0}
-        aria-valuenow={celebrating ? HIKES_PER_UNLOCK : step}
+        aria-valuenow={shown}
         className="unlock-progress-track"
         role="progressbar"
       >
-        <span
-          className={`unlock-progress-fill ${phase === "reset" && animating ? "resetting" : ""}`}
-          style={{ width: `${percent}%` }}
-        />
+        <span className="unlock-progress-fill" style={{ width: `${(shown / total) * 100}%` }} />
       </div>
       <div className="unlock-progress-meta">
         <p role="status">
-          {celebrating && unlocked && <img alt="" src={unlocked.icon} />}
-          <span>{celebrating && unlocked ? <><b>{message}</b> {unlocked.ingredient} is in your jar.</> : message}</span>
+          {celebrating && unlocked ? (
+            <>
+              <img alt="" src={unlocked.icon} />
+              <span><b>New ingredient unlocked!</b> {unlocked.ingredient} is in your jar.</span>
+            </>
+          ) : next ? (
+            <span>Log your next hike to unlock {next.ingredient} ({next.label})!</span>
+          ) : null}
         </p>
-        <span>{celebrating ? HIKES_PER_UNLOCK : step}/{HIKES_PER_UNLOCK} hikes</span>
+        <span>{shown}/{total} ingredients</span>
       </div>
     </div>
   );
@@ -1743,13 +1767,14 @@ function Accomplishments({
     () => new Map(allLogs.filter((log) => log.rank !== null).map((log) => [log.trailName, log])),
     [allLogs],
   );
-  const unlocked = unlockedIndexes(unlockedKeys);
   const totalHikes = allLogs.length;
+  const unlocked = unlockedIndexes(unlockedKeys, totalHikes);
+  const nextIndex = nextUnlockIndex(unlockedKeys, totalHikes);
   const totalMiles = allLogs.reduce((sum, log) => sum + log.miles, 0);
   const topHike = ranking[0] ?? "—";
 
   const hikesForIngredient = (idx: number) =>
-    allLogs.filter((log) => log.highlights.includes(detailOptions[idx].label));
+    allLogs.filter((log) => log.highlights.some((tag) => ingredientForTag(tag) === detailOptions[idx]));
 
   const jarMix = useMemo(() => buildJarMix(hikeShapes(allLogs)), [allLogs]);
 
@@ -1840,8 +1865,13 @@ function Accomplishments({
             </div>
             <div className="ground-shadow" />
           </div>
-          <UnlockProgress collectionComplete={nextUnlockIndex(unlockedKeys) === null} hikes={totalHikes} />
+          <UnlockProgress next={nextIndex !== null ? detailOptions[nextIndex] : null} unlockedCount={unlocked.size} />
           <div className="accom-ingredient-categories">
+            {/* The key: every ingredient and the tag that adds it, in unlock order */}
+            <div className="accom-key-heading">
+              <h3>Ingredient key</h3>
+              <span>Tag a hike to add its ingredient</span>
+            </div>
             <div className="accom-ingredient-grid">
               {detailOptions.map((opt, idx) => {
                 const isUnlocked = unlocked.has(idx);
@@ -1853,14 +1883,15 @@ function Accomplishments({
                     onClick={() => { if (isUnlocked) setSelectedIngredient(idx); }}
                   >
                     {isUnlocked ? (
-                      <img alt={opt.ingredient} src={opt.icon} />
+                      <img alt="" src={opt.icon} />
                     ) : (
                       <div className="ai-lock">🔒</div>
                     )}
                     <span className="ai-name">{opt.ingredient}</span>
-                    {isUnlocked ? (
-                      <span className="ai-count">{hikeCount} {hikeCount === 1 ? "hike" : "hikes"}</span>
-                    ) : null}
+                    <span className="ai-tag">{opt.label}</span>
+                    <span className="ai-count">
+                      {isUnlocked ? `${hikeCount} ${hikeCount === 1 ? "hike" : "hikes"}` : unlockHint(idx, unlocked)}
+                    </span>
                   </div>
                 );
               })}
@@ -1891,12 +1922,13 @@ function Accomplishments({
                 <span>{selectedHikeData.difficulty}</span>
               </div>
             )}
-            {selectedHikeData.highlights.length > 0 && (
+            {selectedHikeData.highlights.some((tag) => ingredientForTag(tag)) && (
               <div className="sheet-detail-row">
                 <span className="sdr-label">Trail mix</span>
                 <span>
                   {selectedHikeData.highlights
-                    .map((label) => detailOptions.find((option) => option.label === label)?.ingredient ?? label)
+                    .map((tag) => ingredientForTag(tag)?.ingredient)
+                    .filter(Boolean)
                     .join(", ")}
                 </span>
               </div>
@@ -1921,7 +1953,7 @@ function Accomplishments({
             <img alt={detailOptions[selectedIngredient].ingredient} className="ids-img" src={detailOptions[selectedIngredient].icon} />
             <h2>{detailOptions[selectedIngredient].ingredient}</h2>
             <div className="ids-subtitle">
-              Unlocked for {detailOptions[selectedIngredient].label.toLowerCase()} on the trail
+              {detailOptions[selectedIngredient].ingredient} · {detailOptions[selectedIngredient].label}
             </div>
             <div className="ids-section-label">Hikes that added this</div>
             {hikesForIngredient(selectedIngredient).map((log) => (
@@ -2483,8 +2515,8 @@ function LogHikeFlow({
   const [saved, setSaved] = useState<{
     logId: string;
     unlockIndex: number | null;
-    hikesBefore: number;
-    collectionComplete: boolean;
+    nextIndex: number | null;
+    unlockedCount: number;
     previousShapes: string[];
     isFirstHike: boolean;
   } | null>(null);
@@ -2526,9 +2558,10 @@ function LogHikeFlow({
     setSaving(true);
     setSaveError("");
     try {
-      // Only saved hikes count, so progress always matches what's in Supabase
+      // Only saved hikes count, so unlocks always match what's in Supabase. Each hike unlocks
+      // the next ingredient.
       const hikesBefore = (myLogs ?? []).length;
-      const unlockIndex = earnsUnlock(hikesBefore + 1) ? nextUnlockIndex(unlockedKeys) : null;
+      const unlockIndex = nextUnlockIndex(unlockedKeys, hikesBefore);
       const logId = await saveHikeLog({
         userId: user.id,
         trailId: trail.id,
@@ -2547,8 +2580,8 @@ function LogHikeFlow({
       setSaved({
         logId,
         unlockIndex,
-        hikesBefore,
-        collectionComplete: nextUnlockIndex(keysAfter) === null,
+        nextIndex: nextUnlockIndex(keysAfter, hikesBefore + 1),
+        unlockedCount: unlockedIndexes(keysAfter, hikesBefore + 1).size,
         previousShapes: hikeShapes(myLogs ?? []),
         isFirstHike: hikesBefore === 0,
       });
@@ -2581,7 +2614,7 @@ function LogHikeFlow({
         setTaggedIds={setTaggedIds}
         taggedIds={taggedIds}
         trailName={trail.name}
-        unlocked={unlockedIndexes(unlockedKeys)}
+        unlocked={unlockedIndexes(unlockedKeys, (myLogs ?? []).length)}
       />
     );
   }
@@ -2611,8 +2644,8 @@ function LogHikeFlow({
       rank={[...ranking, ...lowerRanking].indexOf(trail.name) + 1}
       ranking={ranking}
       trail={trail}
-      collectionComplete={saved.collectionComplete}
-      hikesBefore={saved.hikesBefore}
+      nextIndex={saved.nextIndex}
+      unlockedCount={saved.unlockedCount}
       unlockIndex={saved.unlockIndex}
     />
   );
