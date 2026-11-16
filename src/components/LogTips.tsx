@@ -4,7 +4,8 @@ import { createPortal } from "react-dom";
 // Cashew's tips for the Log a Hike flow, in the same spotlight style as the home tour.
 // Each screen renders <LogTips ids={[...]} /> for the tips it holds and marks its elements
 // with data-tip="…". The first time a tip's element is on screen, the page dims, the
-// element is spotlit and Cashew explains it. Seen tips are saved per user in Supabase.
+// element is spotlit and Cashew explains it until "Got it" is tapped. Seen tips are saved
+// per user in Supabase.
 
 const poses = {
   default: "/assets/cashew-01-default.svg",
@@ -39,7 +40,7 @@ export const TIPS = {
     text: "Pick what this hike had. Each tag adds an ingredient to your jar, like Scenery = cashews!",
   },
   "log-ingredients-locked": { targets: ["locked-ingredient"], pose: "stuffed-cheeks", text: "Grayed out ones unlock as you log more hikes." },
-  "log-jar": { targets: ["jar", "jar-progress"], pose: "toss", text: "Into the jar! Every hike unlocks a new ingredient. Collect all 12!" },
+  "log-jar": { targets: ["jar", "jar-progress"], pose: "toss", text: "Into the jar! Every 2 hikes unlocks a new ingredient." },
   "log-share": { targets: ["share-download"], pose: "celebrate", text: "Want to show it off? Download this for your story!" },
 } satisfies Record<string, Tip>;
 
@@ -172,14 +173,6 @@ function TipOverlay({ tip, onDone, onSkip }: { tip: Tip; onDone: () => void; onS
     return () => cancelAnimationFrame(frame);
   }, [tip]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onDone();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
   // The element went away (the screen changed): close the tip without showing it again
   useEffect(() => {
     if (target) return;
@@ -223,8 +216,8 @@ function TipOverlay({ tip, onDone, onSkip }: { tip: Tip; onDone: () => void; onS
     <div aria-label="Tip from Cashew" aria-modal="true" className="tour log-tip" role="dialog">
       <div className="tour-spot" style={{ left: spot.left, top: spot.top, width: spot.width, height: spot.height }} />
 
-      {/* A tap anywhere dismisses the tip; nothing behind it can be pressed */}
-      <div aria-hidden="true" className="tour-catcher" onClick={onDone} />
+      {/* Blocks taps on the page behind: only "Got it" (or "Skip tips") closes the tip */}
+      <div aria-hidden="true" className="tour-catcher log-tip-catcher" />
 
       <button className="tour-skip" onClick={onSkip} type="button">Skip tips</button>
 

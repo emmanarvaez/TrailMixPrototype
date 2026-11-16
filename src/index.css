@@ -1001,3 +1001,4 @@ img.post-media-item { filter: saturate(.8) sepia(.06); }
   font-family: "Inter:Semi Bold"; font-size: 14px;
 }
 .log-tip-got-it:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.log-tip-catcher { cursor: default; }
