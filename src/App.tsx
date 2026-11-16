@@ -2446,7 +2446,13 @@ export default function App() {
             </button>
           }
         >
-          <Feed loadError={feedError} onFindFriends={() => setShowFindFriends(true)} posts={feedPosts} />
+          <Feed
+            friendIds={myFriends}
+            leaderboardKey={myLogs?.length ?? 0}
+            loadError={feedError}
+            onFindFriends={() => setShowFindFriends(true)}
+            posts={feedPosts}
+          />
         </Shell>
       )}
       {tab === "accomplishments" && (

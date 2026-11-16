@@ -589,3 +589,25 @@ export function watchNotifications(userId: string, onChange: () => void): () => 
   return () => { supabase.removeChannel(channel); };
 }
 
+
+// ─── Leaderboard ─────────────────────────────────────────────────────────────
+
+export type LeaderboardEntry = { userId: string; weekHikes: number; totalHikes: number; ingredients: number };
+
+// Monday of this week in the viewer's time zone, as a hike_logs.date ("2026-11-16")
+export function startOfWeek(now = new Date()): string {
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+  return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, "0")}-${String(monday.getDate()).padStart(2, "0")}`;
+}
+
+// Hike and ingredient counts for the signed-in user and their friends (supabase/012)
+export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
+  const { data, error } = await supabase.rpc("get_leaderboard", { week_start: startOfWeek() });
+  if (error) throw error;
+  return (data as { user_id: string; week_hikes: number; total_hikes: number; ingredients: number }[]).map((row) => ({
+    userId: row.user_id,
+    weekHikes: row.week_hikes,
+    totalHikes: row.total_hikes,
+    ingredients: row.ingredients,
+  }));
+}
