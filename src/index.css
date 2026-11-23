@@ -471,6 +471,13 @@ h1 { margin: 0; font-family: "Inter:Bold"; font-size: clamp(27px, 7.2vw, 32px); 
 .profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .profile-identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
 .profile-avatar { width: 74px; height: 74px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); color: white; display: grid; place-items: center; font-family: "Inter:Bold"; font-size: 29px; box-shadow: 0 0 0 3px var(--cream), 0 0 0 5px var(--sage); }
+.profile-avatar-wrap { position: relative; width: 74px; height: 74px; flex: 0 0 auto; }
+.profile-avatar-edit { position: relative; padding: 0; border: 0; cursor: pointer; }
+.profile-avatar-edit:focus-visible { outline: 2px solid var(--forest); outline-offset: 5px; }
+.profile-avatar-edit:disabled { cursor: wait; }
+.profile-avatar-camera { position: absolute; z-index: 1; right: -5px; bottom: -5px; width: 25px; height: 25px; display: grid; place-items: center; border: 2px solid var(--cream); border-radius: 50%; background: var(--forest); color: white; }
+.profile-avatar-camera svg { width: 14px; height: 14px; }
+.profile-photo-error { margin: 10px 0 0; color: #b5452a; font-size: 12px; }
 .profile-identity .eyebrow { margin-bottom: 4px; font-size: 10px; }
 .profile-identity h1 { font-size: 24px; overflow-wrap: anywhere; }
 .profile-identity p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }

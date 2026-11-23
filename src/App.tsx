@@ -2515,6 +2515,7 @@ export default function App() {
             currentUserId={user.id}
             {...friendProps}
             isOwn
+            onAvatarUpdated={(avatar) => setActiveUser({ ...user, avatar })}
             onFindFriends={() => setShowFindFriends(true)}
             onLogHike={() => switchTab("log")}
             onOpenPost={openPost}
