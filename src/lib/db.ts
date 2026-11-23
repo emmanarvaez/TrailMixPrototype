@@ -119,7 +119,7 @@ export async function searchProfiles(query: string, excludeId: string): Promise<
   );
 }
 
-export async function updateProfile(userId: string, changes: { phone?: string; avatar_url?: string; bio?: string | null }) {
+export async function updateProfile(userId: string, changes: { name?: string; phone?: string; avatar_url?: string; bio?: string | null }) {
   const { error } = await supabase.from("profiles").update(changes).eq("id", userId);
   if (error) {
     throw error.code === "42703" || error.code === "PGRST204"

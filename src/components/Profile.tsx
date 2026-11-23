@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import FriendButton from "./FriendButton";
 import MountainScene from "./MountainScene";
 import PeopleList from "./PeopleList";
@@ -10,6 +10,7 @@ import {
   fetchSavedLogIds,
   fetchTaggedLogIds,
   friendStatus,
+  uploadAvatar,
   type FriendAction,
   type FriendState,
 } from "../lib/db";
@@ -30,6 +31,7 @@ export default function Profile({
   friendState,
   onOpenPost,
   onOpenProfile,
+  onAvatarUpdated,
   onLogHike,
   onFindFriends,
   onFriendAction,
@@ -41,6 +43,7 @@ export default function Profile({
   friendState: FriendState; // the signed-in user's friends and requests
   onOpenPost: (id: string) => void;
   onOpenProfile: (id: string) => void;
+  onAvatarUpdated?: (url: string) => void;
   onLogHike: () => void;
   onFindFriends: () => void;
   onFriendAction: (person: Friend, action: FriendAction) => void;
@@ -54,6 +57,9 @@ export default function Profile({
   const [taggedIds, setTaggedIds] = useState<string[] | null>(null);
   const [savedIds, setSavedIds] = useState<string[] | null>(null);
   const [loadError, setLoadError] = useState("");
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photoError, setPhotoError] = useState("");
+  const [savingPhoto, setSavingPhoto] = useState(false);
   // This profile's accepted friends (IDs), plus their profiles once the list is opened
   const [friendIds, setFriendIds] = useState<string[] | null>(null);
   const [people, setPeople] = useState<Friend[] | null>(null);
@@ -65,6 +71,22 @@ export default function Profile({
   const tabs = isOwn ? OWN_TABS : OTHER_TABS;
   const showingPeople = activeTab === "friends";
   const incoming = isOwn ? friendState.incoming.map(getUser) : [];
+
+  const changePhoto = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !isOwn || !onAvatarUpdated) return;
+    setPhotoError("");
+    setSavingPhoto(true);
+    try {
+      const url = await uploadAvatar(profile.id, file);
+      onAvatarUpdated(url);
+    } catch (uploadError) {
+      setPhotoError((uploadError as { message?: string })?.message ?? "Couldn't upload that photo.");
+    } finally {
+      setSavingPhoto(false);
+    }
+  };
 
   // Reloaded whenever the signed-in user's friendships change, so the count stays right
   const myFriendsKey = friendState.friends.join(",");
@@ -130,9 +152,31 @@ export default function Profile({
     <section className="screen-content profile-screen">
       <header className="profile-heading">
         <div className="profile-identity">
-          <span aria-hidden="true" className="profile-avatar" style={{ background: profile.color }}>
-            {profile.avatar ? <img alt="" src={profile.avatar} /> : profile.name.charAt(0).toUpperCase()}
-          </span>
+          {isOwn ? (
+            <div className="profile-avatar-wrap">
+              <button
+                aria-label="Change profile picture"
+                className="profile-avatar profile-avatar-edit"
+                disabled={savingPhoto}
+                onClick={() => photoInput.current?.click()}
+                style={{ background: profile.color }}
+                type="button"
+              >
+                {profile.avatar ? <img alt="" src={profile.avatar} /> : profile.name.charAt(0).toUpperCase()}
+                <span aria-hidden="true" className="profile-avatar-camera">
+                  <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+                    <path d="M4 7.5h3l1.5-2h7l1.5 2h3v11H4z" />
+                    <circle cx="12" cy="13" r="3.5" />
+                  </svg>
+                </span>
+              </button>
+              <input accept="image/*" capture="environment" className="visually-hidden" onChange={changePhoto} ref={photoInput} tabIndex={-1} type="file" />
+            </div>
+          ) : (
+            <span aria-hidden="true" className="profile-avatar" style={{ background: profile.color }}>
+              {profile.avatar ? <img alt="" src={profile.avatar} /> : profile.name.charAt(0).toUpperCase()}
+            </span>
+          )}
           <div>
             <span className="eyebrow">TrailMix hiker</span>
             <h1>{profile.name}</h1>
@@ -153,6 +197,7 @@ export default function Profile({
           />
         )}
       </header>
+      {photoError && <p className="profile-photo-error" role="alert">{photoError}</p>}
 
       {/* Each profile shows its own owner's bio; "No bio yet" is only a hint, never saved */}
       {profile.bio ? (

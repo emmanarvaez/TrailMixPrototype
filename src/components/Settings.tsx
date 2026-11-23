@@ -4,11 +4,11 @@ import { BIO_MAX_LENGTH, colorFor, saveBio, setUsername, updateProfile, uploadAv
 import { supabase } from "../lib/supabase";
 import UsernameField, { useUsernameCheck } from "./UsernameField";
 
-type Field = "email" | "phone" | "password";
+type Field = "email" | "name" | "password";
 
 const fieldLabels: Record<Field, string> = {
   email: "Change Email Address",
-  phone: "Change Phone Number",
+  name: "Change Name",
   password: "Change Password",
 };
 
@@ -56,14 +56,14 @@ export default function Settings({
 
   const currentValues: Record<Field, string> = {
     email: user.email,
-    phone: user.phone || "No phone number added",
+    name: user.name,
     // The real password is never shown; it's always displayed masked.
     password: "••••••••••",
   };
 
   const startEditing = (field: Field) => {
     setEditing(field);
-    setValue(field === "password" ? "" : field === "phone" ? user.phone ?? "" : user.email);
+    setValue(field === "password" ? "" : field === "name" ? user.name : user.email);
     setConfirmation("");
     setError("");
     setSaved(null);
@@ -78,7 +78,7 @@ export default function Settings({
     event.preventDefault();
     const next = value.trim();
     if (editing === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next)) return setError("Enter a valid email address.");
-    if (editing === "phone" && next.replace(/\D/g, "").length < 10) return setError("Enter a phone number with at least 10 digits.");
+    if (editing === "name" && !next) return setError("Enter a name to continue.");
     if (editing === "password") {
       if (value.length < 8) return setError("Use a password with at least 8 characters.");
       if (value !== confirmation) return setError("Those passwords don't match yet.");
@@ -90,9 +90,9 @@ export default function Settings({
         const { error: emailError } = await supabase.auth.updateUser({ email: next });
         if (emailError) throw emailError;
         setSavedMessage(`Check ${next} to confirm the change`);
-      } else if (editing === "phone") {
-        await updateProfile(user.id, { phone: next });
-        onUpdateUser({ phone: next });
+      } else if (editing === "name") {
+        await updateProfile(user.id, { name: next });
+        onUpdateUser({ name: next });
         setSavedMessage("Saved");
       } else if (editing === "password") {
         const { error: passwordError } = await supabase.auth.updateUser({ password: value });
@@ -169,7 +169,7 @@ export default function Settings({
         <button className="settings-photo-button" onClick={() => fileInput.current?.click()} type="button">
           Change Profile Picture
         </button>
-        <input accept="image/*" className="visually-hidden" onChange={changePhoto} ref={fileInput} tabIndex={-1} type="file" />
+        <input accept="image/*" capture="environment" className="visually-hidden" onChange={changePhoto} ref={fileInput} tabIndex={-1} type="file" />
         {saved === "photo" && <p className="settings-saved">Profile picture updated</p>}
         {photoError && <p className="settings-error" role="alert">{photoError}</p>}
       </div>
@@ -246,11 +246,11 @@ export default function Settings({
               <form className="settings-form" noValidate onSubmit={submit}>
                 <input
                   aria-label={field === "password" ? "New password" : fieldLabels[field]}
-                  autoComplete={field === "email" ? "email" : field === "phone" ? "tel" : "new-password"}
+                  autoComplete={field === "email" ? "email" : field === "name" ? "name" : "new-password"}
                   autoFocus
                   onChange={(event) => setValue(event.target.value)}
-                  placeholder={field === "password" ? "New password" : field === "phone" ? "(555) 123-4567" : "you@example.com"}
-                  type={field === "email" ? "email" : field === "phone" ? "tel" : "password"}
+                  placeholder={field === "password" ? "New password" : field === "name" ? "Your name" : "you@example.com"}
+                  type={field === "email" ? "email" : field === "password" ? "password" : "text"}
                   value={value}
                 />
                 {field === "password" && (
